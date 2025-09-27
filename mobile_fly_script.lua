@@ -1,169 +1,196 @@
--- Fly Script para Móvil basado en el script ruso
--- Adaptado para Roblox Delta
+-- Fly System para Móvil - Basado en Chilli.txt (Desofuscado)
+-- Versión limpia y funcional
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local CoreGui = game:GetService("CoreGui")
 
-local localPlayer = Players.LocalPlayer
-local character = localPlayer.Character or localPlayer.CharacterAdded:Wait()
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
 local humanoid = character:WaitForChild("Humanoid")
 local torso = character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso")
 
--- Configuración basada en el script ruso
-local flightPower = 30
-local maxFlightPower = 100
+-- Configuración como en Chilli.txt
+local flightPower = 50
+local maxFlightPower = 150
 local minFlightPower = 10
-local speedIncrement = 5
+local speedIncrement = 10
 local isFlying = false
 
--- Componentes de física (como en el script ruso)
+-- Física como en el script ruso
 local bodyPosition = Instance.new("BodyPosition")
-local bodyGyro = Instance.new("BodyGyro")
+local bodyGyro = Instance.new("BodyGyro"
 
-bodyGyro.maxTorque = Vector3.new(math.huge, math.huge, math.huge)
-bodyPosition.maxForce = Vector3.new(math.huge, math.huge, math.huge)
+bodyPosition.maxForce = Vector3.new(40000, 40000, 40000)
+bodyGyro.maxTorque = Vector3.new(40000, 40000, 40000)
 
--- Crear interfaz móvil
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "RussianFlyMenu"
-screenGui.Parent = CoreGui
+-- Crear GUI móvil
+local gui = Instance.new("ScreenGui")
+gui.Name = "FlyMobileSystem"
+gui.Parent = CoreGui
 
+-- Marco principal
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 250, 0, 300)
-mainFrame.Position = UDim2.new(0, 10, 0.5, -150)
+mainFrame.Size = UDim2.new(0, 280, 0, 350)
+mainFrame.Position = UDim2.new(0, 10, 0.5, -175)
 mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
 mainFrame.Draggable = true
-mainFrame.Parent = screenGui
+mainFrame.Parent = gui
 
--- Título estilo ruso
+-- Título
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, 0, 0, 40)
 title.Position = UDim2.new(0, 0, 0, 0)
 title.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
-title.Text = "✈️ FLY SYSTEM v3.0"
+title.Text = "🚀 FLY SYSTEM v4.0"
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.TextSize = 16
 title.Font = Enum.Font.GothamBold
 title.Parent = mainFrame
 
--- Botón de activación
+-- Botón principal de fly
 local flyButton = Instance.new("TextButton")
 flyButton.Size = UDim2.new(0.9, 0, 0, 50)
-flyButton.Position = UDim2.new(0.05, 0, 0.15, 0)
-flyButton.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
-flyButton.Text = "🚫 FLY DESACTIVADO"
+flyButton.Position = UDim2.new(0.05, 0, 0.12, 0)
+flyButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+flyButton.Text = "✈️ ACTIVAR VUELO"
 flyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 flyButton.TextSize = 14
 flyButton.Font = Enum.Font.GothamBold
 flyButton.Parent = mainFrame
 
--- Display de potencia (como en el ruso)
+-- Display de potencia
 local powerLabel = Instance.new("TextLabel")
-powerLabel.Size = UDim2.new(0.9, 0, 0, 40)
-powerLabel.Position = UDim2.new(0.05, 0, 0.35, 0)
+powerLabel.Size = UDim2.new(0.9, 0, 0, 35)
+powerLabel.Position = UDim2.new(0.05, 0, 0.28, 0)
 powerLabel.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
-powerLabel.Text = "Flight Power: " .. flightPower
+powerLabel.Text = "POTENCIA: " .. flightPower
 powerLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 powerLabel.TextSize = 14
 powerLabel.Parent = mainFrame
 
--- Botones de control (adaptados para móvil)
+-- Controles de potencia
+local powerUp = Instance.new("TextButton")
+powerUp.Size = UDim2.new(0.4, 0, 0, 35)
+powerUp.Position = UDim2.new(0.05, 0, 0.38, 0)
+powerUp.BackgroundColor3 = Color3.fromRGB(60, 180, 60)
+powerUp.Text = "⬆️ + POTENCIA"
+powerUp.TextColor3 = Color3.fromRGB(255, 255, 255)
+powerUp.TextSize = 12
+powerUp.Parent = mainFrame
+
+local powerDown = Instance.new("TextButton")
+powerDown.Size = UDim2.new(0.4, 0, 0, 35)
+powerDown.Position = UDim2.new(0.55, 0, 0.38, 0)
+powerDown.BackgroundColor3 = Color3.fromRGB(180, 60, 60)
+powerDown.Text = "⬇️ - POTENCIA"
+powerDown.TextColor3 = Color3.fromRGB(255, 255, 255)
+powerDown.TextSize = 12
+powerDown.Parent = mainFrame
+
+-- Área de control direccional (Joystick virtual)
+local joystickArea = Instance.new("Frame")
+joystickArea.Size = UDim2.new(0.9, 0, 0, 120)
+joystickArea.Position = UDim2.new(0.05, 0, 0.52, 0)
+joystickArea.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
+joystickArea.BorderSizePixel = 2
+joystickArea.BorderColor3 = Color3.fromRGB(100, 100, 150)
+joystickArea.Parent = mainFrame
+
+local joystickDot = Instance.new("Frame")
+joystickDot.Size = UDim2.new(0, 30, 0, 30)
+joystickDot.Position = UDim2.new(0.5, -15, 0.5, -15)
+joystickDot.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+joystickDot.BorderSizePixel = 0
+joystickDot.Parent = joystickArea
+
+local joystickLabel = Instance.new("TextLabel")
+joystickLabel.Size = UDim2.new(1, 0, 0, 30)
+joystickLabel.Position = UDim2.new(0, 0, 0.85, 0)
+joystickLabel.BackgroundTransparency = 1
+joystickLabel.Text = "⬅️➡️ MUEVE EL PUNTO PARA VOLAR"
+joystickLabel.TextColor3 = Color3.fromRGB(200, 200, 255)
+joystickLabel.TextSize = 11
+joystickLabel.TextWrapped = true
+joystickLabel.Parent = joystickArea
+
+-- Controles de altura
 local upButton = Instance.new("TextButton")
-upButton.Size = UDim2.new(0.4, 0, 0, 40)
-upButton.Position = UDim2.new(0.05, 0, 0.5, 0)
-upButton.BackgroundColor3 = Color3.fromRGB(60, 150, 60)
-upButton.Text = "⬆️ +POWER"
+upButton.Size = UDim2.new(0.4, 0, 0, 35)
+upButton.Position = UDim2.new(0.05, 0, 0.78, 0)
+upButton.BackgroundColor3 = Color3.fromRGB(80, 80, 200)
+upButton.Text = "⬆️ ASCENDER"
 upButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 upButton.TextSize = 12
 upButton.Parent = mainFrame
 
 local downButton = Instance.new("TextButton")
-downButton.Size = UDim2.new(0.4, 0, 0, 40)
-downButton.Position = UDim2.new(0.55, 0, 0.5, 0)
-downButton.BackgroundColor3 = Color3.fromRGB(150, 60, 60)
-downButton.Text = "⬇️ -POWER"
+downButton.Size = UDim2.new(0.4, 0, 0, 35)
+downButton.Position = UDim2.new(0.55, 0, 0.78, 0)
+downButton.BackgroundColor3 = Color3.fromRGB(200, 80, 80)
+downButton.Text = "⬇️ DESCENDER"
 downButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 downButton.TextSize = 12
 downButton.Parent = mainFrame
 
--- Área de control direccional (simula joystick)
-local joystickFrame = Instance.new("Frame")
-joystickFrame.Size = UDim2.new(0.9, 0, 0, 100)
-joystickFrame.Position = UDim2.new(0.05, 0, 0.65, 0)
-joystickFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
-joystickFrame.BorderSizePixel = 2
-joystickFrame.BorderColor3 = Color3.fromRGB(100, 100, 150)
-joystickFrame.Parent = mainFrame
-
-local joystickLabel = Instance.new("TextLabel")
-joystickLabel.Size = UDim2.new(1, 0, 1, 0)
-joystickLabel.BackgroundTransparency = 1
-joystickLabel.Text = "⬅️➡️ MOVE JOYSTICK\n⬆️⬇️ USE GAME JOYSTICK"
-joystickLabel.TextColor3 = Color3.fromRGB(200, 200, 255)
-joystickLabel.TextSize = 11
-joystickLabel.TextWrapped = true
-joystickLabel.Parent = joystickFrame
-
--- Variables de control táctil
+-- Variables de control
 local touchStartPos = nil
 local touchCurrentPos = nil
 local touchActive = false
 local moveDirection = Vector2.new(0, 0)
+local verticalInput = 0
 
--- Función para actualizar la UI
+-- Función para actualizar UI
 local function updateUI()
     if isFlying then
         flyButton.BackgroundColor3 = Color3.fromRGB(60, 200, 60)
-        flyButton.Text = "✈️ FLY ACTIVADO"
+        flyButton.Text = "✈️ VUELO ACTIVADO"
     else
-        flyButton.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
-        flyButton.Text = "🚫 FLY DESACTIVADO"
+        flyButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+        flyButton.Text = "🚫 VUELO DESACTIVADO"
     end
-    powerLabel.Text = "Flight Power: " .. flightPower
+    powerLabel.Text = "POTENCIA: " .. flightPower
 end
 
--- Función de activación del vuelo (estilo ruso)
-local function activateFly()
+-- Función de activación de vuelo (estilo ruso)
+local function activateFlight()
     if isFlying or not torso then return end
     
     isFlying = true
     
-    -- Configurar componentes como en el script ruso
+    -- Configurar componentes físicos
     bodyPosition.Parent = torso
-    bodyPosition.Position = torso.Position + Vector3.new(0, 10, 0)
+    bodyPosition.Position = torso.Position + Vector3.new(0, 5, 0)
     bodyGyro.Parent = torso
     
     humanoid.PlatformStand = true
     
     updateUI()
     
-    -- Loop de vuelo principal (adaptado del ruso)
+    -- Loop principal de vuelo
     spawn(function()
         while isFlying and torso and torso.Parent do
             local camera = workspace.CurrentCamera
             
             if camera then
-                -- Usar la dirección de la cámara como referencia
+                -- Control direccional con joystick
                 local cameraCFrame = camera.CFrame
-                
-                -- Aplicar movimiento basado en input táctil
                 local moveVector = Vector3.new(
                     moveDirection.X * flightPower,
-                    0,
+                    verticalInput * flightPower,
                     moveDirection.Y * flightPower
                 )
                 
                 -- Convertir a espacio mundial
                 local worldMove = cameraCFrame:VectorToWorldSpace(moveVector)
                 
-                -- Actualizar posición (método del script ruso)
+                -- Aplicar movimiento (método ruso)
                 bodyPosition.Position = torso.Position + worldMove
                 
-                -- Mantener rotación estable mirando hacia adelante
+                -- Mantener orientación
                 bodyGyro.CFrame = CFrame.new(torso.Position, torso.Position + cameraCFrame.LookVector)
             end
             
@@ -172,8 +199,8 @@ local function activateFly()
     end)
 end
 
--- Función de desactivación del vuelo
-local function deactivateFly()
+-- Función de desactivación
+local function deactivateFlight()
     if not isFlying then return end
     
     isFlying = false
@@ -186,10 +213,11 @@ local function deactivateFly()
     end
     
     moveDirection = Vector2.new(0, 0)
+    verticalInput = 0
     updateUI()
 end
 
--- Control de potencia (como en el script ruso)
+-- Control de potencia
 local function increasePower()
     flightPower = math.min(flightPower + speedIncrement, maxFlightPower)
     updateUI()
@@ -203,107 +231,95 @@ end
 -- Conexión de botones
 flyButton.MouseButton1Click:Connect(function()
     if isFlying then
-        deactivateFly()
+        deactivateFlight()
     else
-        activateFly()
+        activateFlight()
     end
 end)
 
-upButton.MouseButton1Click:Connect(increasePower)
-downButton.MouseButton1Click:Connect(decreasePower)
+powerUp.MouseButton1Click:Connect(increasePower)
+powerDown.MouseButton1Click:Connect(decreasePower)
 
--- Sistema de control táctil mejorado
-joystickFrame.InputBegan:Connect(function(input)
+-- Control táctil del joystick
+joystickArea.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.Touch then
         touchStartPos = input.Position
         touchActive = true
     end
 end)
 
-joystickFrame.InputChanged:Connect(function(input)
+joystickArea.InputChanged:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.Touch and touchActive then
         touchCurrentPos = input.Position
         
-        local delta = (touchCurrentPos - touchStartPos)
-        local maxDelta = 50
+        local center = joystickArea.AbsolutePosition + joystickArea.AbsoluteSize / 2
+        local delta = (touchCurrentPos - center)
+        local maxDistance = 40
         
-        -- Normalizar la dirección
+        -- Limitar movimiento del joystick visual
+        local distance = math.min(delta.Magnitude, maxDistance)
+        local direction = delta.Unit
+        
+        -- Actualizar posición visual del joystick
+        joystickDot.Position = UDim2.new(0.5, direction.X * distance, 0.5, direction.Y * distance)
+        
+        -- Calcular dirección de movimiento
         moveDirection = Vector2.new(
-            math.clamp(delta.X / maxDelta, -1, 1),
-            math.clamp(delta.Y / maxDelta, -1, 1)
+            math.clamp(delta.X / maxDistance, -1, 1),
+            math.clamp(delta.Y / maxDistance, -1, 1)
         )
-        
-        -- Actualizar visual del joystick
-        joystickLabel.Text = string.format("MOVING:\nX: %.1f\nY: %.1f", moveDirection.X, moveDirection.Y)
     end
 end)
 
-joystickFrame.InputEnded:Connect(function(input)
+joystickArea.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.Touch then
         touchActive = false
         moveDirection = Vector2.new(0, 0)
-        joystickLabel.Text = "⬅️➡️ MOVE JOYSTICK\n⬆️⬇️ USE GAME JOYSTICK"
+        -- Resetear joystick visual
+        joystickDot.Position = UDim2.new(0.5, -15, 0.5, -15)
     end
 end)
 
--- Control de altura con botones táctiles
-local heightInput = 0
-local heightUpBtn = Instance.new("TextButton")
-heightUpBtn.Size = UDim2.new(0.4, 0, 0, 30)
-heightUpBtn.Position = UDim2.new(0.05, 0, 0.55, 0)
-heightUpBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 200)
-heightUpBtn.Text = "⬆️ ASCENDER"
-heightUpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-heightUpBtn.TextSize = 10
-heightUpBtn.Parent = mainFrame
-
-local heightDownBtn = Instance.new("TextButton")
-heightDownBtn.Size = UDim2.new(0.4, 0, 0, 30)
-heightDownBtn.Position = UDim2.new(0.55, 0, 0.55, 0)
-heightDownBtn.BackgroundColor3 = Color3.fromRGB(200, 80, 80)
-heightDownBtn.Text = "⬇️ DESCENDER"
-heightDownBtn.TextSize = 10
-heightDownBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-heightDownBtn.Parent = mainFrame
-
-heightUpBtn.MouseButton1Down:Connect(function()
-    heightInput = 1
+-- Control de altura
+upButton.MouseButton1Down:Connect(function()
+    verticalInput = 1
 end)
 
-heightUpBtn.MouseButton1Up:Connect(function()
-    heightInput = 0
+upButton.MouseButton1Up:Connect(function()
+    verticalInput = 0
 end)
 
-heightDownBtn.MouseButton1Down:Connect(function()
-    heightInput = -1
+downButton.MouseButton1Down:Connect(function()
+    verticalInput = -1
 end)
 
-heightDownBtn.MouseButton1Up:Connect(function()
-    heightInput = 0
+downButton.MouseButton1Up:Connect(function()
+    verticalInput = 0
 end)
 
--- Loop para control de altura
-spawn(function()
-    while true do
-        if isFlying and torso and bodyPosition then
-            bodyPosition.Position = bodyPosition.Position + Vector3.new(0, heightInput * 2, 0)
-        end
-        wait(0.1)
-    end
-end)
-
--- Manejar respawn del personaje
-localPlayer.CharacterAdded:Connect(function(newCharacter)
+-- Manejar respawn
+player.CharacterAdded:Connect(function(newCharacter)
     character = newCharacter
     humanoid = newCharacter:WaitForChild("Humanoid")
     torso = newCharacter:FindFirstChild("UpperTorso") or newCharacter:FindFirstChild("Torso")
     
-    deactivateFly()
-    wait(2) -- Esperar a que el personaje se estabilice
+    deactivateFlight()
+    wait(2) -- Esperar estabilización
 end)
 
 -- Inicializar
 updateUI()
-print("✅ Russian Fly System adaptado para móvil cargado")
-print("📱 Usa el área joystick para moverte horizontalmente")
-print("⬆️⬇️ Usa los botones de altura para subir/bajar")
+
+print("✅ Sistema de Vuelo para Móvil Cargado")
+print("🎮 Usa el área joystick para moverte")
+print("⬆️⬇️ Botones para altura")
+print("⚡ Ajusta la potencia con los botones +-")
+
+return {
+    activateFlight = activateFlight,
+    deactivateFlight = deactivateFlight,
+    setFlightPower = function(power)
+        flightPower = math.clamp(power, minFlightPower, maxFlightPower)
+        updateUI()
+    end
+}
