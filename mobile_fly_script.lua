@@ -1,4 +1,4 @@
-– LocalScript de Velocidad y Vuelo
+– LocalScript de Velocidad y Vuelo CORREGIDO
 – COLOCAR EN: StarterPlayer > StarterCharacterScripts
 
 local Players = game:GetService(“Players”)
@@ -18,16 +18,18 @@ local flyEnabled = false
 local flySpeed = 50
 local flying = false
 
-– Componentes de vuelo modernos
-local linearVelocity = nil
-local alignOrientation = nil
-local attachment = nil
-
-– Variables de control
+– Componentes de vuelo
+local bodyVelocity = nil
+local bodyGyro = nil
 local flyConnection = nil
 
-– Función para crear GUI
+– Variables de control de vuelo
+local upPressed = false
+local downPressed = false
+
+– Función para crear GUI (CORREGIDA)
 local function createGUI()
+– CORRECCIÓN: Acceder correctamente a PlayerGui
 local playerGui = player:WaitForChild(“PlayerGui”)
 
 ```
@@ -35,12 +37,13 @@ local playerGui = player:WaitForChild(“PlayerGui”)
 local existingGUI = playerGui:FindFirstChild("SpeedFlyGUI")
 if existingGUI then
     existingGUI:Destroy()
+    wait(0.1) -- Pequeña pausa para asegurar limpieza
 end
 
 -- Crear ScreenGui
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "SpeedFlyGUI"
-screenGui.Parent = playerGui
+screenGui.Parent = playerGui -- CORRECCIÓN: playerGui, no player.Character.PlayerGui
 
 -- Frame principal
 local mainFrame = Instance.new("Frame")
@@ -171,6 +174,7 @@ instructions.TextWrapped = true
 instructions.Parent = mainFrame
 
 return {
+    screenGui = screenGui,
     speedButton = speedButton,
     speedLabel = speedLabel,
     speedUpButton = speedUpButton,
@@ -223,6 +227,35 @@ applySpeed()
 end
 end
 
+– Funciones para manejar controles de vuelo
+local function handleFlyUp(actionName, inputState, inputObject)
+if not flyEnabled then return Enum.ContextActionResult.Pass end
+
+```
+if inputState == Enum.UserInputState.Begin then
+    upPressed = true
+elseif inputState == Enum.UserInputState.End then
+    upPressed = false
+end
+return Enum.ContextActionResult.Sink
+```
+
+end
+
+local function handleFlyDown(actionName, inputState, inputObject)
+if not flyEnabled then return Enum.ContextActionResult.Pass end
+
+```
+if inputState == Enum.UserInputState.Begin then
+    downPressed = true
+elseif inputState == Enum.UserInputState.End then
+    downPressed = false
+end
+return Enum.ContextActionResult.Sink
+```
+
+end
+
 – Función para limpiar componentes de vuelo
 local function cleanupFly()
 if flyConnection then
@@ -231,29 +264,27 @@ flyConnection = nil
 end
 
 ```
-if linearVelocity then
-    linearVelocity:Destroy()
-    linearVelocity = nil
+if bodyVelocity then
+    bodyVelocity:Destroy()
+    bodyVelocity = nil
 end
 
-if alignOrientation then
-    alignOrientation:Destroy()
-    alignOrientation = nil
-end
-
-if attachment then
-    attachment:Destroy()
-    attachment = nil
+if bodyGyro then
+    bodyGyro:Destroy()
+    bodyGyro = nil
 end
 
 -- Limpiar ContextActionService
 ContextActionService:UnbindAction("FlyUp")
 ContextActionService:UnbindAction("FlyDown")
+
+upPressed = false
+downPressed = false
 ```
 
 end
 
-– Función para iniciar vuelo
+– Función para iniciar vuelo (SIMPLIFICADA Y ROBUSTA)
 local function startFly()
 local character = player.Character
 if not character then return end
@@ -266,41 +297,23 @@ if not humanoid or not rootPart then return end
 
 flying = true
 
--- Crear attachment para BodyMovers modernos
-attachment = Instance.new("Attachment")
-attachment.Parent = rootPart
+-- Usar BodyMovers clásicos para máxima compatibilidad
+bodyVelocity = Instance.new("BodyVelocity")
+bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+bodyVelocity.Parent = rootPart
 
--- LinearVelocity para movimiento moderno
-linearVelocity = Instance.new("LinearVelocity")
-linearVelocity.Attachment0 = attachment
-linearVelocity.MaxForce = 10000
-linearVelocity.VectorVelocity = Vector3.new(0, 0, 0)
-linearVelocity.Parent = rootPart
-
--- AlignOrientation para estabilidad
-alignOrientation = Instance.new("AlignOrientation")
-alignOrientation.Attachment0 = attachment
-alignOrientation.MaxTorque = 10000
-alignOrientation.Responsiveness = 50
-alignOrientation.Parent = rootPart
+bodyGyro = Instance.new("BodyGyro")
+bodyGyro.MaxTorque = Vector3.new(0, math.huge, 0)
+bodyGyro.AngularVelocity = Vector3.new(0, 0, 0)
+bodyGyro.Parent = rootPart
 
 -- Configurar humanoid
 humanoid.PlatformStand = true
 
--- Controles de vuelo usando ContextActionService
-local function flyUp(actionName, inputState)
-    -- Esta función se maneja en el loop principal
-    return Enum.ContextActionResult.Pass
-end
-
-local function flyDown(actionName, inputState)
-    -- Esta función se maneja en el loop principal
-    return Enum.ContextActionResult.Pass
-end
-
--- Bind actions (esto creará botones automáticamente en móvil)
-ContextActionService:BindAction("FlyUp", flyUp, true, Enum.KeyCode.Space)
-ContextActionService:BindAction("FlyDown", flyDown, true, Enum.KeyCode.LeftShift)
+-- Bind controles usando ContextActionService (crea botones automáticamente en móvil)
+ContextActionService:BindAction("FlyUp", handleFlyUp, true, Enum.KeyCode.Space)
+ContextActionService:BindAction("FlyDown", handleFlyDown, true, Enum.KeyCode.LeftShift)
 
 -- Loop principal de vuelo
 flyConnection = RunService.Heartbeat:Connect(function()
@@ -309,33 +322,28 @@ flyConnection = RunService.Heartbeat:Connect(function()
     local camera = workspace.CurrentCamera
     local cameraCFrame = camera.CFrame
     
-    -- Obtener input de movimiento del humanoid (funciona con WASD y joystick)
+    -- Obtener movimiento del humanoid (funciona con WASD y joystick móvil)
     local moveVector = humanoid.MoveDirection
     
-    -- Calcular dirección basada en cámara
+    -- Convertir a espacio de cámara
     local forwardVector = cameraCFrame.LookVector
     local rightVector = cameraCFrame.RightVector
     
-    -- Movimiento horizontal
+    -- Calcular velocidad horizontal
     local horizontalVelocity = (forwardVector * moveVector.Z + rightVector * moveVector.X) * flySpeed
     
-    -- Movimiento vertical
+    -- Calcular velocidad vertical
     local verticalVelocity = 0
-    
-    -- Verificar controles verticales
-    local spacePressed = UserInputService:IsKeyDown(Enum.KeyCode.Space)
-    local shiftPressed = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift)
-    
-    if spacePressed then
+    if upPressed then
         verticalVelocity = flySpeed
-    elseif shiftPressed then
+    elseif downPressed then
         verticalVelocity = -flySpeed
     end
     
-    -- Para móvil: usar Jump como subir
+    -- Para móvil: interceptar salto como subir
     if UserInputService.TouchEnabled and humanoid.Jump then
         verticalVelocity = flySpeed
-        humanoid.Jump = false
+        humanoid.Jump = false -- Prevenir salto normal
     end
     
     -- Aplicar velocidad final
@@ -345,13 +353,13 @@ flyConnection = RunService.Heartbeat:Connect(function()
         horizontalVelocity.Z
     )
     
-    if linearVelocity then
-        linearVelocity.VectorVelocity = finalVelocity
+    if bodyVelocity then
+        bodyVelocity.Velocity = finalVelocity
     end
     
-    -- Mantener orientación hacia la cámara
-    if alignOrientation then
-        alignOrientation.CFrame = cameraCFrame
+    -- Actualizar orientación del cuerpo
+    if bodyGyro then
+        bodyGyro.CFrame = cameraCFrame
     end
 end)
 ```
@@ -411,10 +419,16 @@ end
 
 – Función principal que se ejecuta cuando aparece el personaje
 local function setupCharacter()
+– CORRECCIÓN: Esperar a que el personaje y sus componentes estén completamente cargados
 local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild(“Humanoid”)
+local rootPart = character:WaitForChild(“HumanoidRootPart”)
 
 ```
--- Limpiar cualquier vuelo anterior
+-- Pequeña pausa adicional para asegurar carga completa
+wait(0.5)
+
+-- Limpiar cualquier componente anterior
 cleanupFly()
 
 -- Crear GUI
@@ -453,14 +467,22 @@ updateFlyUI(gui)
 applySpeed()
 
 print("✅ Speed & Fly LocalScript cargado correctamente!")
+print("📱 GUI creada en PlayerGui")
+print("⚡ Velocidad: " .. (speedEnabled and "ON" or "OFF"))
+print("✈️ Vuelo: " .. (flyEnabled and "ON" or "OFF"))
 ```
 
 end
 
-– Manejar cuando el personaje aparece/reaparece
-player.CharacterAdded:Connect(setupCharacter)
-
-– Si ya hay un personaje, configurarlo inmediatamente
-if player.Character then
+– CORRECCIÓN: Manejar creación de personaje de forma más robusta
+local function onCharacterAdded()
 setupCharacter()
+end
+
+– Conectar evento
+player.CharacterAdded:Connect(onCharacterAdded)
+
+– Si ya hay un personaje, configurarlo
+if player.Character and player.Character.Parent then
+onCharacterAdded()
 end
