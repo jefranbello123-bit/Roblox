@@ -57,7 +57,8 @@ screenGui.Parent = CoreGui
 local mainButton = Instance.new("TextButton")
 mainButton.Size            = UDim2.new(0, 70, 0, 70)
 mainButton.Position        = UDim2.new(0.5, -35, 0.1, 0)
-mainButton.Text            = "ðŸ‘ï¸"
+-- Use plain text to avoid font issues with emojis
+mainButton.Text            = "MENÃš"
 mainButton.TextSize        = 30
 mainButton.Font            = Enum.Font.GothamBold
 mainButton.TextColor3      = Color3.new(1, 1, 1)
@@ -88,7 +89,8 @@ menuCorner.Parent       = menuFrame
 local title = Instance.new("TextLabel")
 title.Size            = UDim2.new(1, 0, 0, 30)
 title.Position        = UDim2.new(0, 0, 0, 0)
-title.Text            = "ðŸ‘ï¸ ESP + ðŸš€ WALKHACK"
+-- Plain title to avoid emoji rendering issues
+title.Text            = "ESP + WALKHACK"
 title.TextSize        = 16
 title.Font            = Enum.Font.GothamBold
 title.TextColor3      = Color3.new(1, 1, 1)
@@ -111,11 +113,6 @@ closeButton.Parent            = menuFrame
 local closeCorner = Instance.new("UICorner")
 closeCorner.CornerRadius = UDim.new(0, 4)
 closeCorner.Parent       = closeButton
-
--- When the X button is clicked, close the menu
-closeButton.MouseButton1Click:Connect(function()
-    closeMenu()
-end)
 
 -- ESP button
 local espButton = Instance.new("TextButton")
@@ -435,6 +432,9 @@ end
 
 -- Event connections
 mainButton.MouseButton1Click:Connect(openMenu)
+closeButton.MouseButton1Click:Connect(function()
+    closeMenu()
+end)
 espButton.MouseButton1Click:Connect(toggleESP)
 walkButton.MouseButton1Click:Connect(toggleWalkhack)
 upButton.MouseButton1Click:Connect(function()
@@ -463,19 +463,21 @@ applyWalkhack()
 -- Allows the user to drag the main button and attached menu.  Supports
 -- both touch and mouse input.  The menu follows the button with a
 -- horizontal offset.
-local dragging   = false
-local dragStart  = nil
-local startPos   = nil
-local dragInput  = nil
+local dragging        = false
+local dragStart       = nil
+local startButtonPos  = nil
+local startMenuPos    = nil
+local dragInput       = nil
 
 -- Begin dragging on touch or left mouse down
-local function inputBegan(input)
+local function beginDrag(input)
     if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging  = true
-        dragStart = input.Position
-        startPos  = mainButton.Position
-        dragInput = input
-        input.Changed:Connect(function() -- stop dragging when input ends
+        dragging       = true
+        dragStart      = input.Position
+        startButtonPos = mainButton.Position
+        startMenuPos   = menuFrame.Position
+        dragInput      = input
+        input.Changed:Connect(function()
             if input.UserInputState == Enum.UserInputState.End then
                 dragging = false
             end
@@ -484,7 +486,7 @@ local function inputBegan(input)
 end
 
 -- Update drag input reference if a new touch/mouse movement is detected
-local function inputChanged(input)
+local function updateDragInput(input)
     if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement then
         dragInput = input
     end
@@ -494,26 +496,32 @@ end
 UserInputService.InputChanged:Connect(function(input)
     if input == dragInput and dragging then
         local delta = input.Position - dragStart
-        -- Update main button position
-        mainButton.Position = UDim2.new(
-            startPos.X.Scale,
-            startPos.X.Offset + delta.X,
-            startPos.Y.Scale,
-            startPos.Y.Offset + delta.Y
-        )
-        -- Move menu with a slight horizontal offset
-        menuFrame.Position = UDim2.new(
-            startPos.X.Scale,
-            startPos.X.Offset + delta.X - 75,
-            startPos.Y.Scale,
-            startPos.Y.Offset + delta.Y
-        )
+        -- Update positions by adding the delta to the original positions.
+        if startButtonPos then
+            mainButton.Position = UDim2.new(
+                startButtonPos.X.Scale,
+                startButtonPos.X.Offset + delta.X,
+                startButtonPos.Y.Scale,
+                startButtonPos.Y.Offset + delta.Y
+            )
+        end
+        if startMenuPos then
+            menuFrame.Position = UDim2.new(
+                startMenuPos.X.Scale,
+                startMenuPos.X.Offset + delta.X,
+                startMenuPos.Y.Scale,
+                startMenuPos.Y.Offset + delta.Y
+            )
+        end
     end
 end)
 
 -- Attach input handlers to the main button
-mainButton.InputBegan:Connect(inputBegan)
-mainButton.InputChanged:Connect(inputChanged)
+-- Allow dragging from both the menu and the button
+mainButton.InputBegan:Connect(beginDrag)
+mainButton.InputChanged:Connect(updateDragInput)
+menuFrame.InputBegan:Connect(beginDrag)
+menuFrame.InputChanged:Connect(updateDragInput)
 
 -- Debug messages (printed to developer console)
 print("ðŸŽ¯ ESP + WALKHACK CARGADO!")
