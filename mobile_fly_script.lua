@@ -1,6 +1,3 @@
-Entiendo, gracias por tu feedback. Vamos a mejorar el script para que sea más funcional y visualmente atractivo. Aquí tienes una versión revisada que debería funcionar mejor y tener un aspecto más agradable:
-
-```lua
 -- Crear el menú circular
 local circleMenu = Instance.new("ScreenGui")
 circleMenu.Name = "CircleMenu"
@@ -116,16 +113,3 @@ game:GetService("UserInputService").InputChanged:Connect(function(input)
         update(input)
     end
 end)
-```
-
-### Mejoras realizadas:
-1. **Velocidad Inicial**: He establecido la velocidad inicial en 16, que es un valor más razonable para Roblox.
-2. **Incrementos/Decrementos**: Los botones ahora incrementan y decrementan la velocidad en pasos de 1, lo cual es más manejable.
-3. **Estética**: He mejorado ligeramente la apariencia del menú para que sea más visible y atractivo.
-
-### Cómo funciona:
-- **Menú Circular**: Al hacer clic en el círculo, se abre el menú de opciones.
-- **Ajuste de Velocidad**: Puedes aumentar o disminuir la velocidad usando los botones "Up" y "Down". La velocidad se actualiza en tiempo real.
-- **Arrastrable**: El menú circular se puede arrastrar por toda la pantalla.
-
-Espero que esta versión cumpla con tus expectativas. Si necesitas más ajustes, no dudes en decírmelo.
