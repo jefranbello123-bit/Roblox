@@ -1,10 +1,8 @@
 --[[
-    Enhanced ESP + WalkHack + Fly with Sidebar Menu and GodMode
+    Enhanced ESP + WalkHack + Fly with Sidebar Menu, GodMode y Teletransportar
 
-    Este script mejora la interfaz del panel con nuevas secciones, colores y control de tamaño de texto para el ESP.
-    Se ha añadido una sección de ajustes donde el usuario puede cambiar el tamaño de los nombres mostrados en el ESP.
-    Los botones de navegación incorporan iconos y un tema cromático renovado para una experiencia más atractiva.
-
+    Este script amplía la interfaz del panel con nuevas secciones, colores y un apartado para teletransportar al jugador a otros jugadores.
+    Se ocultan las etiquetas de nombre predeterminadas de Roblox y se muestran etiquetas personalizadas.
     Nota: El uso de scripts de este tipo suele violar los Términos de Servicio de Roblox. Úsalo bajo tu responsabilidad.
 ]]
 
@@ -180,10 +178,12 @@ local function addSection(name, iconId)
     return button
 end
 
--- Botones de navegación (ESP, PLAYER, SETTINGS)
+-- Botones de navegación (ESP, PLAYER, SETTINGS, TELETRANSPORTAR)
 local navEsp     = addSection("ESP", "rbxassetid://6031071058")
 local navPlayer  = addSection("PLAYER", "rbxassetid://6031071019")
 local navSettings= addSection("SETTINGS", "rbxassetid://6031280882")
+-- Nuevo apartado de Teletransportar
+local navTP      = addSection("TELETRANSPORTAR", "rbxassetid://6035078885")
 
 -- Sección ESP
 local espContent = Instance.new("Frame", contentFrame)
@@ -320,6 +320,124 @@ local settingsContent = Instance.new("Frame", contentFrame)
 settingsContent.Size     = UDim2.new(1,0,1,0)
 settingsContent.BackgroundTransparency = 1
 
+-- Sección Teletransportar
+local tpContent = Instance.new("Frame", contentFrame)
+tpContent.Size     = UDim2.new(1,0,1,0)
+tpContent.BackgroundTransparency = 1
+
+-- Variables para TP
+local selectedTpTarget = nil
+-- Contenedor para la lista de jugadores
+local tpListFrame = Instance.new("ScrollingFrame", tpContent)
+tpListFrame.Size     = UDim2.new(0.8,0,0.6,0)
+tpListFrame.Position = UDim2.new(0.1,0,0.1,0)
+tpListFrame.ScrollBarThickness = 6
+tpListFrame.CanvasSize = UDim2.new(0,0,0,0)
+tpListFrame.BackgroundColor3 = Color3.fromRGB(40,40,70)
+tpListFrame.BorderSizePixel  = 0
+tpListFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+do
+    local corner = Instance.new("UICorner", tpListFrame)
+    corner.CornerRadius = UDim.new(0,8)
+end
+local listLayout = Instance.new("UIListLayout", tpListFrame)
+listLayout.Padding = UDim.new(0,4)
+listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
+-- Botón para refrescar la lista de jugadores
+local tpRefreshButton = Instance.new("TextButton", tpContent)
+tpRefreshButton.Size     = UDim2.new(0.35,0,0,30)
+tpRefreshButton.Position = UDim2.new(0.1,0,0.75,0)
+tpRefreshButton.Text     = "Actualizar"
+tpRefreshButton.TextSize = 12
+tpRefreshButton.Font     = Enum.Font.GothamBold
+tpRefreshButton.TextColor3       = Color3.new(1,1,1)
+tpRefreshButton.BackgroundColor3 = Color3.fromRGB(60,170,90)
+tpRefreshButton.BorderSizePixel  = 0
+do
+    local corner = Instance.new("UICorner", tpRefreshButton)
+    corner.CornerRadius = UDim.new(0,8)
+    local stroke = Instance.new("UIStroke", tpRefreshButton)
+    stroke.Thickness = 2
+    stroke.Color     = Color3.fromRGB(70,70,110)
+end
+
+-- Botón para teletransportar al jugador seleccionado
+local tpActionButton = Instance.new("TextButton", tpContent)
+tpActionButton.Size     = UDim2.new(0.35,0,0,30)
+tpActionButton.Position = UDim2.new(0.55,0,0.75,0)
+tpActionButton.Text     = "TP"
+tpActionButton.TextSize = 12
+tpActionButton.Font     = Enum.Font.GothamBold
+tpActionButton.TextColor3       = Color3.new(1,1,1)
+tpActionButton.BackgroundColor3 = Color3.fromRGB(170,60,70)
+tpActionButton.BorderSizePixel  = 0
+do
+    local corner = Instance.new("UICorner", tpActionButton)
+    corner.CornerRadius = UDim.new(0,8)
+    local stroke = Instance.new("UIStroke", tpActionButton)
+    stroke.Thickness = 2
+    stroke.Color     = Color3.fromRGB(70,70,110)
+end
+
+-- Función para poblar la lista de jugadores
+local function populatePlayerList()
+    -- Limpiar lista existente
+    selectedTpTarget = nil
+    for _, child in ipairs(tpListFrame:GetChildren()) do
+        if child:IsA("TextButton") then
+            child:Destroy()
+        end
+    end
+    -- Añadir jugador para cada usuario en el servidor (excepto local)
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= player then
+            local item = Instance.new("TextButton", tpListFrame)
+            item.Size     = UDim2.new(1,0,0,30)
+            item.Text     = p.Name
+            item.TextSize = 12
+            item.Font     = Enum.Font.Gotham
+            item.TextColor3       = Color3.new(1,1,1)
+            item.BackgroundColor3 = Color3.fromRGB(50,50,80)
+            item.BorderSizePixel  = 0
+            do
+                local corner = Instance.new("UICorner", item)
+                corner.CornerRadius = UDim.new(0,6)
+            end
+            local function selectItem()
+                -- Reset colours
+                for _, btn in ipairs(tpListFrame:GetChildren()) do
+                    if btn:IsA("TextButton") then
+                        btn.BackgroundColor3 = Color3.fromRGB(50,50,80)
+                    end
+                end
+                item.BackgroundColor3 = Color3.fromRGB(60,80,160)
+                selectedTpTarget = p
+            end
+            item.MouseButton1Click:Connect(selectItem)
+        end
+    end
+end
+
+-- Actualizar la lista al pulsar refrescar
+tpRefreshButton.MouseButton1Click:Connect(populatePlayerList)
+
+-- Teletransportar al jugador seleccionado
+tpActionButton.MouseButton1Click:Connect(function()
+    if selectedTpTarget then
+        local targetChar = selectedTpTarget.Character
+        local myChar     = player.Character
+        if targetChar and myChar then
+            local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
+            local myRoot     = myChar:FindFirstChild("HumanoidRootPart")
+            if targetRoot and myRoot then
+                -- Teletransportar al jugador con un pequeño offset para evitar colisiones
+                myRoot.CFrame = targetRoot.CFrame * CFrame.new(0, 3, 0)
+            end
+        end
+    end
+end)
+
 -- Control de tamaño de nombre de ESP
 local espSizeLabel = Instance.new("TextLabel", settingsContent)
 espSizeLabel.Size     = UDim2.new(0.8,0,0,25)
@@ -423,9 +541,10 @@ local function updateNav()
             if icon then icon.ImageColor3 = Color3.fromRGB(160,160,200) end
         end
     end
-    espContent.Visible     = currentSection == "ESP"
-    playerContent.Visible  = currentSection == "PLAYER"
-    settingsContent.Visible= currentSection == "SETTINGS"
+    espContent.Visible      = currentSection == "ESP"
+    playerContent.Visible   = currentSection == "PLAYER"
+    settingsContent.Visible = currentSection == "SETTINGS"
+    tpContent.Visible       = currentSection == "TELETRANSPORTAR"
 end
 local function showSection(name)
     currentSection = name
@@ -436,6 +555,11 @@ end
 navEsp.MouseButton1Click:Connect(function() showSection("ESP") end)
 navPlayer.MouseButton1Click:Connect(function() showSection("PLAYER") end)
 navSettings.MouseButton1Click:Connect(function() showSection("SETTINGS") end)
+navTP.MouseButton1Click:Connect(function()
+    showSection("TELETRANSPORTAR")
+    -- refrescar la lista de jugadores al entrar en la sección
+    populatePlayerList()
+end)
 updateNav()
 
 -- Lógica de WalkHack
@@ -575,6 +699,10 @@ local function createESP(target)
             for _,c in ipairs(folder:GetChildren()) do c:Destroy() end
             return
         end
+        -- Ocultar etiqueta de nombre predeterminada de Roblox para este jugador
+        pcall(function()
+            hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+        end)
         for _,c in ipairs(folder:GetChildren()) do c:Destroy() end
         local box = Instance.new("BoxHandleAdornment", folder)
         box.Adornee      = root
@@ -730,4 +858,4 @@ mainButton.InputChanged:Connect(updateDragInput)
 menuFrame.InputBegan:Connect(beginDrag)
 menuFrame.InputChanged:Connect(updateDragInput)
 
-print("🎯 Menú multipanel con GodMode mejorado cargado. Pulsa el icono para abrir y navega entre ESP, PLAYER y SETTINGS.")
+print("🎯 Menú multipanel mejorado cargado. Pulsa el icono para abrir y navega entre ESP, PLAYER, SETTINGS y TELETRANSPORTAR.")
