@@ -1,9 +1,9 @@
 --[[
-    Admin Panel Mobile (Rojo/Negro) — FIX TOUCH & LAYOUT
-    - Botón Menu a la izquierda (no tapa joystick ni salto) y draggable.
-    - Panel tipo bottom sheet con ZIndex correcto (interactivo).
-    - Sliders arrastrables desde la barra y el knob.
-    - ESP (highlight + nombres), WalkSpeed, Fly (↑/↓), GodMode, Noclip, Teleport, Visuals.
+    Admin Panel Mobile (Rojo/Negro) — POSICIÓN ALTA + FIX TOUCH
+    - Panel tipo "bottom sheet" que abre alto (top=10% por defecto).
+    - ZIndex/Active configurados para que todos los controles se puedan tocar.
+    - Oculta Menu y botones Fly cuando el panel está abierto (evita superposición).
+    - Incluye: ESP (Highlight + nombres), WalkSpeed, Fly (↑/↓), GodMode, Noclip, Teleport, Visuals.
     ⚠️ Puede violar TOS de Roblox. Úsalo bajo tu responsabilidad.
 ]]
 
@@ -12,9 +12,15 @@ local Players          = game:GetService("Players")
 local RunService       = game:GetService("RunService")
 local TweenService     = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
+local GuiService       = game:GetService("GuiService")
 local CoreGui          = game:GetService("CoreGui")
 local Workspace        = game:GetService("Workspace")
 local LP = Players.LocalPlayer
+
+-------------------- Config de posición del panel --------------------
+-- Sube/baja el panel cambiando estos dos:
+local SHEET_TOP    = 0.10   -- 0.10 = 10% desde arriba (más pequeño = más alto)
+local SHEET_HEIGHT = 0.82   -- 82% de alto
 
 -------------------- Tema --------------------
 local Theme = {
@@ -43,16 +49,14 @@ local function makeSwitch(parent, defaultOn, onChanged)
     switch.Size = UDim2.new(0, 72, 0, 32)
     switch.BackgroundColor3 = defaultOn and Theme.accent or Theme.railOff
     switch.BorderSizePixel = 0
-    round(switch, 16); stroke(switch,1)
-    switch.ZIndex = 22
+    round(switch, 16); stroke(switch,1); switch.ZIndex = 22
 
     local knob = Instance.new("Frame", switch)
     knob.Size = UDim2.new(0, 26, 0, 26)
     knob.Position = defaultOn and UDim2.new(1, -29, 0, 3) or UDim2.new(0, 3, 0, 3)
     knob.BackgroundColor3 = Theme.sheet
     knob.BorderSizePixel = 0
-    round(knob, 13); stroke(knob,1)
-    knob.ZIndex = 23
+    round(knob, 13); stroke(knob,1); knob.ZIndex = 23
 
     local btn = Instance.new("TextButton", switch)
     btn.BackgroundTransparency = 1
@@ -80,29 +84,45 @@ end
 
 -- Slider (bar + knob draggable)
 local function makeSlider(parent, maxValue, step, defaultValue, onChanged)
-    local holder = Instance.new("Frame"); holder.Size = UDim2.new(1,-10,0,44); holder.BackgroundTransparency=1; holder.ZIndex=21
+    local holder = Instance.new("Frame")
+    holder.Size = UDim2.new(1,-10,0,44)
+    holder.BackgroundTransparency = 1
+    holder.ZIndex = 21
 
     local bar = Instance.new("Frame", holder)
-    bar.AnchorPoint = Vector2.new(0, 0.5); bar.Position = UDim2.new(0,0,0.5,0)
-    bar.Size = UDim2.new(1, -72, 0, 8); bar.BackgroundColor3=Theme.railOff; bar.BorderSizePixel=0
+    bar.AnchorPoint = Vector2.new(0, 0.5)
+    bar.Position = UDim2.new(0,0,0.5,0)
+    bar.Size = UDim2.new(1, -72, 0, 8)
+    bar.BackgroundColor3 = Theme.railOff
+    bar.BorderSizePixel = 0
     round(bar,4); stroke(bar,1); bar.ZIndex=21
+    bar.Active = true
 
     local fill = Instance.new("Frame", bar)
     fill.Size = UDim2.new(math.clamp(defaultValue/maxValue,0,1),0,1,0)
-    fill.BackgroundColor3 = Theme.accent; fill.BorderSizePixel = 0
+    fill.BackgroundColor3 = Theme.accent
+    fill.BorderSizePixel = 0
     round(fill,4); fill.ZIndex=22
 
     local knob = Instance.new("Frame", bar)
     knob.AnchorPoint = Vector2.new(0.5,0.5)
     knob.Position = UDim2.new(math.clamp(defaultValue/maxValue,0,1),0,0.5,0)
     knob.Size = UDim2.new(0,18,0,18)
-    knob.BackgroundColor3 = Theme.sheet; knob.BorderSizePixel=0
+    knob.BackgroundColor3 = Theme.sheet
+    knob.BorderSizePixel = 0
     round(knob,9); stroke(knob,1); knob.ZIndex=23
+    knob.Active = true
 
     local valueLabel = Instance.new("TextLabel", holder)
-    valueLabel.Size = UDim2.new(0,64,1,0); valueLabel.AnchorPoint=Vector2.new(1,0); valueLabel.Position=UDim2.new(1,0,0,0)
-    valueLabel.BackgroundTransparency=1; valueLabel.Font=Enum.Font.GothamBold; valueLabel.TextSize=16
-    valueLabel.TextColor3=Theme.text; valueLabel.Text=tostring(defaultValue); valueLabel.ZIndex=21
+    valueLabel.Size = UDim2.new(0,64,1,0)
+    valueLabel.AnchorPoint = Vector2.new(1,0)
+    valueLabel.Position = UDim2.new(1,0,0,0)
+    valueLabel.BackgroundTransparency = 1
+    valueLabel.Font = Enum.Font.GothamBold
+    valueLabel.TextSize = 16
+    valueLabel.TextColor3 = Theme.text
+    valueLabel.Text = tostring(defaultValue)
+    valueLabel.ZIndex = 21
 
     local dragging = false
     local function setFromX(x)
@@ -120,10 +140,18 @@ local function makeSlider(parent, maxValue, step, defaultValue, onChanged)
     local function finish() dragging=false end
     local function move(i) if dragging then setFromX(i.Position.X) end end
 
-    bar.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseButton1 then begin(i) end end)
-    bar.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseButton1 then finish() end end)
-    knob.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseButton1 then begin(i) end end)
-    knob.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseButton1 then finish() end end)
+    bar.InputBegan:Connect(function(i)
+        if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseButton1 then begin(i) end
+    end)
+    bar.InputEnded:Connect(function(i)
+        if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseButton1 then finish() end
+    end)
+    knob.InputBegan:Connect(function(i)
+        if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseButton1 then begin(i) end
+    end)
+    knob.InputEnded:Connect(function(i)
+        if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseButton1 then finish() end
+    end)
     UserInputService.InputChanged:Connect(function(i)
         if (i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseMovement) then move(i) end
     end)
@@ -164,12 +192,12 @@ ESPGui.Parent = LP:WaitForChild("PlayerGui")
 -------------------- Botón Menu (izquierda-media) + draggable --------------------
 local openBtn = Instance.new("TextButton")
 openBtn.Name="OpenMenu"; openBtn.Size=UDim2.new(0,64,0,64)
-openBtn.Position=UDim2.new(0.04,0,0.40,0)  -- lejos del joystick (izq) y del botón de salto (der)
+openBtn.Position=UDim2.new(0.04,0,0.40,0)
 openBtn.Text="Menu"; openBtn.TextSize=16; openBtn.Font=Enum.Font.GothamBlack
 openBtn.TextColor3=Theme.text; openBtn.BackgroundColor3=Theme.accent; openBtn.BorderSizePixel=0
 round(openBtn,32); stroke(openBtn,1); openBtn.ZIndex=30; openBtn.Parent=Root
 
--- Drag del botón Menu (toca y arrastra)
+-- Drag del botón Menu
 do
     local dragging=false; local startPos; local start
     openBtn.InputBegan:Connect(function(i)
@@ -184,15 +212,19 @@ do
     end)
 end
 
--------------------- Bottom Sheet --------------------
+-------------------- Panel (abre alto) --------------------
 local sheet = Instance.new("Frame", Root)
-sheet.Visible=false; sheet.Size=UDim2.new(1,0,0.60,0); sheet.Position=UDim2.new(0,0,1,0)
+sheet.Visible=false
+sheet.Size=UDim2.new(1,0,SHEET_HEIGHT,0)
+sheet.Position=UDim2.new(0,0,1,0) -- fuera de pantalla (cierra)
 sheet.BackgroundColor3=Theme.sheet; sheet.BorderSizePixel=0
 round(sheet,18); stroke(sheet,1); sheet.ZIndex=20
+sheet.Active = true -- captura toques
 
 local dim = Instance.new("Frame", Root)
 dim.BackgroundColor3=Color3.new(0,0,0); dim.BackgroundTransparency=1
-dim.Size=UDim2.new(1,0,1,0); dim.Visible=false; dim.ZIndex=10 -- debajo del sheet
+dim.Size=UDim2.new(1,0,1,0); dim.Visible=false; dim.ZIndex=10
+dim.Active = true
 
 -- Topbar
 local topbar = Instance.new("Frame", sheet)
@@ -214,6 +246,7 @@ local nav = Instance.new("ScrollingFrame", sheet)
 nav.Position=UDim2.new(0,0,0,50); nav.Size=UDim2.new(1,0,0,48)
 nav.CanvasSize=UDim2.new(0,0,0,0); nav.AutomaticCanvasSize=Enum.AutomaticSize.X
 nav.ScrollBarThickness=4; nav.BackgroundColor3=Theme.bg; nav.BorderSizePixel=0; nav.ZIndex=21
+nav.Active = true; nav.ClipsDescendants = true
 local navList = Instance.new("UIListLayout", nav); navList.FillDirection=Enum.FillDirection.Horizontal; navList.Padding=UDim.new(0,8)
 
 local function makeNavBtn(text)
@@ -228,6 +261,7 @@ local content = Instance.new("ScrollingFrame", sheet)
 content.Position=UDim2.new(0,0,0,98); content.Size=UDim2.new(1,0,1,-98)
 content.CanvasSize=UDim2.new(0,0,0,0); content.AutomaticCanvasSize=Enum.AutomaticSize.Y
 content.ScrollBarThickness=6; content.BackgroundColor3=Theme.sheet; content.BorderSizePixel=0; content.ZIndex=21
+content.Active = true; content.ClipsDescendants = true
 local contentList = Instance.new("UIListLayout", content); contentList.Padding=UDim.new(0,12); contentList.HorizontalAlignment=Enum.HorizontalAlignment.Center
 
 -------------------- Secciones --------------------
@@ -327,7 +361,7 @@ do
     local sw3,_=makeSwitch(c3,false,function(v) S.noclip=v; if v then enableNoclip() else disableNoclip() end end); sw3.AnchorPoint=Vector2.new(1,0.5); sw3.Position=UDim2.new(1,-14,0.5,0); sw3.Parent=c3
 
     local c4=makeCard(secMain,"Fly","W/A/S/D + botones ↑/↓")
-    local sw4,_=makeSwitch(c4,false,function(v) S.fly=v; if v then startFly() else stopFly() end _G.__Ascend=false; _G.__Descend=false; ascendBtn.Visible=v; descendBtn.Visible=v end); sw4.AnchorPoint=Vector2.new(1,0.5); sw4.Position=UDim2.new(1,-14,0.5,0); sw4.Parent=c4
+    local sw4,_=makeSwitch(c4,false,function(v) S.fly=v; if v then startFly() else stopFly() end _G.__Ascend=false; _G.__Descend=false; ascendBtn.Visible=v and not sheet.Visible; descendBtn.Visible=v and not sheet.Visible end); sw4.AnchorPoint=Vector2.new(1,0.5); sw4.Position=UDim2.new(1,-14,0.5,0); sw4.Parent=c4
 
     local c5=makeCard(secMain,"WalkSpeed","Velocidad del personaje")
     local sw5,_=makeSwitch(c5,false,function(v) S.walkspeed=v; applyWalk() end); sw5.AnchorPoint=Vector2.new(1,0.5); sw5.Position=UDim2.new(1,-14,0.5,0); sw5.Parent=c5
@@ -339,8 +373,11 @@ local secTP = makeSection("Teleport")
 do
     local listCard=makeCard(secTP,"Jugadores","Toca un nombre y pulsa TP"); listCard.Size=UDim2.new(1,-24,0,240)
     local list=Instance.new("ScrollingFrame",listCard); list.Position=UDim2.new(0,16,0,42); list.Size=UDim2.new(1,-32,1,-92)
-    list.BackgroundColor3=Theme.bg; list.BorderSizePixel=0; round(list,10); stroke(list,1); list.CanvasSize=UDim2.new(0,0,0,0); list.AutomaticCanvasSize=Enum.AutomaticSize.Y; list.ScrollBarThickness=4; list.ZIndex=21
+    list.BackgroundColor3=Theme.bg; list.BorderSizePixel=0; round(list,10); stroke(list,1)
+    list.CanvasSize=UDim2.new(0,0,0,0); list.AutomaticCanvasSize=Enum.AutomaticSize.Y; list.ScrollBarThickness=4; list.ZIndex=21
+    list.Active = true; list.ClipsDescendants = true
     local ll=Instance.new("UIListLayout",list); ll.Padding=UDim.new(0,6)
+
     local selected
     local function refresh()
         for _,c in ipairs(list:GetChildren()) do if c:IsA("TextButton") then c:Destroy() end end
@@ -370,13 +407,12 @@ end
 local secInfo = makeSection("Info")
 do local c=makeCard(secInfo,"Tema","Rojo/Negro. Controles touch grandes."); c.Size=UDim2.new(1,-24,0,74) end
 
--------------------- Sección inicial --------------------
+-------------------- Sección inicial + tabs --------------------
 local function setActiveTab(name) for n,btn in pairs(navButtons) do btn.BackgroundColor3 = (n==name) and Theme.accentDim or Theme.card end end
-for _,n in ipairs(navOrder) do end
 showSection("Main"); setActiveTab("Main")
 for n,btn in pairs(navButtons) do btn.MouseButton1Click:Connect(function() setActiveTab(n) end) end
 
--------------------- Botones Fly ↑/↓ (derecha alta, lejos del salto) --------------------
+-------------------- Botones Fly ↑/↓ --------------------
 ascendBtn = Instance.new("TextButton", Root)
 ascendBtn.Size=UDim2.new(0,48,0,48); ascendBtn.Position=UDim2.new(0.88,0,0.32,0)
 ascendBtn.Text="↑"; ascendBtn.TextSize=22; ascendBtn.Font=Enum.Font.GothamBold; ascendBtn.TextColor3=Theme.text
@@ -389,18 +425,26 @@ descendBtn.Text="↓"; descendBtn.TextSize=22; descendBtn.Font=Enum.Font.GothamB
 descendBtn.BackgroundColor3=Theme.accentDim; descendBtn.BorderSizePixel=0; round(descendBtn,12); stroke(descendBtn,1); descendBtn.Visible=false; descendBtn.ZIndex=25
 descendBtn.MouseButton1Down:Connect(function() _G.__Descend=true end); descendBtn.MouseButton1Up:Connect(function() _G.__Descend=false end)
 
--------------------- Abrir / Cerrar panel --------------------
+-------------------- Abrir / Cerrar panel (alto) --------------------
 local function openSheet()
     sheet.Visible=true; dim.Visible=true
+    openBtn.Visible=false
+    ascendBtn.Visible = S.fly and false
+    descendBtn.Visible = S.fly and false
     TweenService:Create(dim, TweenInfo.new(0.15), {BackgroundTransparency = 0.35}):Play()
-    TweenService:Create(sheet, TweenInfo.new(0.20, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-        {Position = UDim2.new(0,0, 1 - sheet.Size.Y.Scale, 0)}):Play()
+    TweenService:Create(sheet, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        {Position = UDim2.new(0,0, SHEET_TOP, 0)}):Play()
 end
 local function closeSheet()
     TweenService:Create(dim, TweenInfo.new(0.12), {BackgroundTransparency = 1}):Play()
     TweenService:Create(sheet, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
         {Position = UDim2.new(0,0, 1, 0)}):Play()
-    task.delay(0.2, function() sheet.Visible=false; dim.Visible=false end)
+    task.delay(0.20, function()
+        sheet.Visible=false; dim.Visible=false
+        openBtn.Visible=true
+        ascendBtn.Visible = S.fly
+        descendBtn.Visible = S.fly
+    end)
 end
 openBtn.MouseButton1Click:Connect(openSheet)
 closeBtn.MouseButton1Click:Connect(closeSheet)
@@ -416,4 +460,4 @@ LP.CharacterAdded:Connect(function()
     if S.fly       then startFly() ascendBtn.Visible=true; descendBtn.Visible=true end
 end)
 
-print("✅ Admin Panel Mobile FIX listo. Arrastra el botón 'Menu' si necesitas reubicarlo.")
+print("✅ Admin Panel Mobile POSICIÓN ALTA listo. Ajusta SHEET_TOP/SHEET_HEIGHT si quieres más arriba/abajo.")
