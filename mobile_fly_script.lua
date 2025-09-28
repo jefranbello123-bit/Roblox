@@ -1,4 +1,3 @@
-
 --[[
     ESP + WalkHack Script (Improved)
 
@@ -97,6 +96,27 @@ title.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 title.BorderSizePixel = 0
 title.Parent          = menuFrame
 
+-- Close button (X) to hide the menu and restore the main button
+local closeButton = Instance.new("TextButton")
+closeButton.Size              = UDim2.new(0, 25, 0, 25)
+closeButton.Position          = UDim2.new(1, -30, 0, 5)
+closeButton.Text              = "X"
+closeButton.TextSize          = 16
+closeButton.Font              = Enum.Font.GothamBold
+closeButton.TextColor3        = Color3.new(1, 1, 1)
+closeButton.BackgroundColor3  = Color3.fromRGB(200, 60, 60)
+closeButton.BorderSizePixel   = 0
+closeButton.Parent            = menuFrame
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 4)
+closeCorner.Parent       = closeButton
+
+-- When the X button is clicked, close the menu
+closeButton.MouseButton1Click:Connect(function()
+    closeMenu()
+end)
+
 -- ESP button
 local espButton = Instance.new("TextButton")
 espButton.Size              = UDim2.new(0.9, 0, 0, 40)
@@ -185,6 +205,12 @@ local menuOpen = false
 
 -- Applies the current walk speed to the player's humanoid.  When the
 -- walkhack is disabled the speed resets to Roblox's default (16).
+-- Keeps track of a connection used to continuously apply the walk speed.
+local walkUpdateConnection = nil
+
+-- Applies the current walk speed once.  When the walkhack is enabled a
+-- RenderStepped connection will continuously enforce this value to
+-- override any attempts by the game to reset it.
 local function applyWalkhack()
     local character = player.Character
     if not character then return end
@@ -203,11 +229,32 @@ local function toggleWalkhack()
     if walkhackEnabled then
         walkButton.Text             = "WALKHACK: ON"
         walkButton.BackgroundColor3 = Color3.fromRGB(60, 200, 60)
+        -- Immediately apply the new speed
+        applyWalkhack()
+        -- Continuously enforce the walkspeed every frame.  Some games
+        -- overwrite WalkSpeed, so updating it each RenderStepped frame
+        -- keeps the speed hack active.
+        if not walkUpdateConnection then
+            walkUpdateConnection = RunService.RenderStepped:Connect(function()
+                local char = player.Character
+                if char then
+                    local hum = char:FindFirstChildOfClass("Humanoid")
+                    if hum then
+                        hum.WalkSpeed = currentSpeed
+                    end
+                end
+            end)
+        end
     else
         walkButton.Text             = "WALKHACK: OFF"
         walkButton.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+        -- Disconnect continuous updater and reset speed
+        if walkUpdateConnection then
+            walkUpdateConnection:Disconnect()
+            walkUpdateConnection = nil
+        end
+        applyWalkhack()
     end
-    applyWalkhack()
 end
 
 -----------------------------------------------------------
@@ -286,7 +333,8 @@ local function createESP(targetPlayer)
         local billboard = Instance.new("BillboardGui")
         billboard.Name        = "ESP_Name"
         billboard.Adornee     = root
-        billboard.Size        = UDim2.new(0, 200, 0, 25)
+        -- Make the label taller so names are more visible
+        billboard.Size        = UDim2.new(0, 200, 0, 40)
         billboard.StudsOffset = Vector3.new(0, 4, 0)
         billboard.AlwaysOnTop = true
         billboard.MaxDistance = 1000
@@ -296,7 +344,8 @@ local function createESP(targetPlayer)
         nameLabel.BackgroundTransparency = 1
         nameLabel.Text               = targetPlayer.Name .. " [" .. math.floor(humanoid.Health) .. " HP]"
         nameLabel.TextColor3         = Color3.new(1, 1, 1)
-        nameLabel.TextSize           = 14
+        -- Increase the text size for better readability
+        nameLabel.TextSize           = 20
         nameLabel.Font               = Enum.Font.GothamBold
         nameLabel.Parent             = billboard
         -- Tracer line (yellow) from our character to the target
@@ -368,14 +417,24 @@ end
 -- UI / Menu Logic
 -----------------------------------------------------------
 
--- Opens or closes the menu
-local function toggleMenu()
-    menuOpen = not menuOpen
-    menuFrame.Visible = menuOpen
+-- Show the menu and hide the main button.  Called when the eye icon
+-- is clicked.
+local function openMenu()
+    menuOpen            = true
+    mainButton.Visible  = false
+    menuFrame.Visible   = true
+end
+
+-- Hide the menu and restore the main button.  Called when the X
+-- button is clicked.
+local function closeMenu()
+    menuOpen            = false
+    menuFrame.Visible   = false
+    mainButton.Visible  = true
 end
 
 -- Event connections
-mainButton.MouseButton1Click:Connect(toggleMenu)
+mainButton.MouseButton1Click:Connect(openMenu)
 espButton.MouseButton1Click:Connect(toggleESP)
 walkButton.MouseButton1Click:Connect(toggleWalkhack)
 upButton.MouseButton1Click:Connect(function()
