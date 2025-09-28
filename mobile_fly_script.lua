@@ -1,7 +1,9 @@
 --[[
-    ESP + WalkHack + Fly con menú multipanel
-    Este script añade ESP, WalkHack (ajuste de velocidad) y Fly, con una interfaz organizada
-    en secciones tipo barra lateral. Mientras arrastras el menú, el juego no rota la cámara.
+    ESP + WalkHack + Fly con menú multipanel (móvil y PC)
+    - Menú dividido en secciones con barra lateral: “ESP” y “PLAYER”.
+    - Arrastrar el menú no mueve la cámara ni el personaje.
+    - Vuelo: botones ↑ y ↓ separados y más altos.
+    - Se corrigen variables mal declaradas (gradientes, etc.) para que el menú abra correctamente.
 ]]
 
 local Players          = game:GetService("Players")
@@ -10,10 +12,16 @@ local CoreGui          = game:GetService("CoreGui")
 local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
-local espEnabled, walkhackEnabled, flyEnabled = false, false, false
-local currentSpeed = 100
+
+-- Estados globales
+local espEnabled       = false
+local walkhackEnabled  = false
+local flyEnabled       = false
+local currentSpeed     = 100
 local flyBodyGyro, flyBodyVelocity, flyUpdateConnection
 local flyAscend, flyDescend = false, false
+
+-- Almacenes para ESP
 local espFolders, espUpdateConnections = {}, {}
 local playerAddedConnection, playerRemovingConnection = nil, nil
 
@@ -21,68 +29,76 @@ local playerAddedConnection, playerRemovingConnection = nil, nil
 local screenGui = Instance.new("ScreenGui", CoreGui)
 screenGui.Name = "ESPWalkhackMenu"
 
--- Botón menú
+-- Botón principal
 local mainButton = Instance.new("TextButton", screenGui)
-mainButton.Size     = UDim2.new(0,70,0,70)
-mainButton.Position = UDim2.new(0.5,-35,0.1,0)
+mainButton.Size     = UDim2.new(0, 70, 0, 70)
+mainButton.Position = UDim2.new(0.5, -35, 0.1, 0)
 mainButton.Text     = "Menu"
 mainButton.TextSize = 30
 mainButton.Font     = Enum.Font.GothamBold
 mainButton.TextColor3       = Color3.new(1,1,1)
 mainButton.BackgroundColor3 = Color3.fromRGB(255,100,0)
 mainButton.BorderSizePixel  = 0
-mainButton.ZIndex           = 2
-Instance.new("UICorner", mainButton).CornerRadius = UDim.new(1,0)
-Instance.new("UIStroke", mainButton).Thickness = 2
-Instance.new("UIGradient", mainButton).Color = ColorSequence.new{
+mainButton.ZIndex = 2
+
+local mainCorner = Instance.new("UICorner", mainButton)
+mainCorner.CornerRadius = UDim.new(1,0)
+local mainStroke = Instance.new("UIStroke", mainButton)
+mainStroke.Thickness = 2
+local mainGradient = Instance.new("UIGradient", mainButton)
+mainGradient.Color = ColorSequence.new{
     ColorSequenceKeypoint.new(0,Color3.fromRGB(255,170,0)),
     ColorSequenceKeypoint.new(1,Color3.fromRGB(255,100,0))
 }
-buttonGradient.Rotation = 90
+mainGradient.Rotation = 90
 
--- Marco menú
+-- Marco del menú
 local menuFrame = Instance.new("Frame", screenGui)
-menuFrame.Size            = UDim2.new(0,270,0,340)
-menuFrame.Position        = UDim2.new(0.5,-135,0.1,0)
+menuFrame.Size            = UDim2.new(0, 270, 0, 340)
+menuFrame.Position        = UDim2.new(0.5, -135, 0.1, 0)
 menuFrame.BackgroundColor3= Color3.fromRGB(40,40,40)
 menuFrame.BorderSizePixel = 0
 menuFrame.Visible         = false
 menuFrame.ZIndex          = 1
-Instance.new("UICorner", menuFrame).CornerRadius = UDim.new(0,15)
-Instance.new("UIGradient", menuFrame).Color = ColorSequence.new{
-    ColorSequenceKeypoint.new(0,Color3.fromRGB(50,50,50)),
-    ColorSequenceKeypoint.new(1,Color3.fromRGB(25,25,25))
+local menuCorner = Instance.new("UICorner", menuFrame)
+menuCorner.CornerRadius = UDim.new(0,15)
+local menuGradient = Instance.new("UIGradient", menuFrame)
+menuGradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(50,50,50)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(25,25,25))
 }
 menuGradient.Rotation = 90
 
--- Título
+-- Título superior
 local title = Instance.new("TextLabel", menuFrame)
-title.Size     = UDim2.new(1,0,0,30)
-title.Text     = "ESP • WALKHACK • FLY"
-title.TextSize = 16
-title.Font     = Enum.Font.GothamBold
+title.Size            = UDim2.new(1, 0, 0, 30)
+title.Text            = "ESP • WALKHACK • FLY"
+title.TextSize        = 16
+title.Font            = Enum.Font.GothamBold
 title.TextColor3      = Color3.new(1,1,1)
 title.BackgroundColor3= Color3.fromRGB(25,25,25)
 title.BorderSizePixel = 0
 
--- Botón cerrar menú
+-- Botón de cierre
 local closeButton = Instance.new("TextButton", menuFrame)
-closeButton.Size     = UDim2.new(0,25,0,25)
-closeButton.Position = UDim2.new(1,-30,0,5)
+closeButton.Size     = UDim2.new(0, 25, 0, 25)
+closeButton.Position = UDim2.new(1, -30, 0, 5)
 closeButton.Text     = "X"
 closeButton.TextSize = 16
 closeButton.Font     = Enum.Font.GothamBold
 closeButton.TextColor3       = Color3.new(1,1,1)
 closeButton.BackgroundColor3 = Color3.fromRGB(200,60,60)
 closeButton.BorderSizePixel  = 0
-Instance.new("UICorner", closeButton).CornerRadius = UDim.new(0,4)
-Instance.new("UIStroke", closeButton).Thickness = 2
-Instance.new("UIStroke", closeButton).Color = Color3.fromRGB(50,50,50)
+local closeCorner = Instance.new("UICorner", closeButton)
+closeCorner.CornerRadius = UDim.new(0, 4)
+local closeStroke = Instance.new("UIStroke", closeButton)
+closeStroke.Thickness = 2
+closeStroke.Color     = Color3.fromRGB(50,50,50)
 
--- Botones de vuelo (↑ y ↓)
+-- Botones de vuelo (↑ / ↓)
 local ascendButton = Instance.new("TextButton", screenGui)
-ascendButton.Size     = UDim2.new(0,40,0,40)
-ascendButton.Position = UDim2.new(0.80,0,0.70,0)
+ascendButton.Size     = UDim2.new(0, 40, 0, 40)
+ascendButton.Position = UDim2.new(0.80, 0, 0.70, 0)
 ascendButton.Text     = "↑"
 ascendButton.TextSize = 20
 ascendButton.Font     = Enum.Font.GothamBold
@@ -95,8 +111,8 @@ Instance.new("UIStroke", ascendButton).Thickness = 2
 Instance.new("UIStroke", ascendButton).Color = Color3.fromRGB(50,50,50)
 
 local descendButton = Instance.new("TextButton", screenGui)
-descendButton.Size     = UDim2.new(0,40,0,40)
-descendButton.Position = UDim2.new(0.88,0,0.70,0)
+descendButton.Size     = UDim2.new(0, 40, 0, 40)
+descendButton.Position = UDim2.new(0.88, 0, 0.70, 0)
 descendButton.Text     = "↓"
 descendButton.TextSize = 20
 descendButton.Font     = Enum.Font.GothamBold
@@ -110,30 +126,30 @@ Instance.new("UIStroke", descendButton).Color = Color3.fromRGB(50,50,50)
 
 -- Panel de navegación (izquierda)
 local navFrame = Instance.new("Frame", menuFrame)
-navFrame.Size     = UDim2.new(0,80,1,-30)
-navFrame.Position = UDim2.new(0,0,0,30)
+navFrame.Size     = UDim2.new(0, 80, 1, -30)
+navFrame.Position = UDim2.new(0, 0, 0, 30)
 navFrame.BackgroundColor3 = Color3.fromRGB(35,35,35)
 navFrame.BorderSizePixel  = 0
 
 -- Panel de contenido (derecha)
 local contentFrame = Instance.new("Frame", menuFrame)
-contentFrame.Size     = UDim2.new(1,-80,1,-30)
-contentFrame.Position = UDim2.new(0,80,0,30)
+contentFrame.Size     = UDim2.new(1, -80, 1, -30)
+contentFrame.Position = UDim2.new(0, 80, 0, 30)
 contentFrame.BackgroundTransparency = 1
 contentFrame.BorderSizePixel = 0
 
--- Función para crear botones de la barra lateral
+-- Crea un botón para la barra lateral
 local function createNavButton(name, order)
     local btn = Instance.new("TextButton")
     btn.Name = name.."NavButton"
     btn.Size = UDim2.new(1,0,0,40)
     btn.Position = UDim2.new(0,0,0,(order-1)*45)
-    btn.Text = name
+    btn.Text     = name
     btn.TextSize = 14
-    btn.Font = Enum.Font.GothamBold
-    btn.TextColor3 = Color3.fromRGB(200,200,200)
+    btn.Font     = Enum.Font.GothamBold
+    btn.TextColor3       = Color3.fromRGB(200,200,200)
     btn.BackgroundColor3 = Color3.fromRGB(45,45,45)
-    btn.BorderSizePixel = 0
+    btn.BorderSizePixel  = 0
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0,4)
     Instance.new("UIStroke", btn).Thickness = 1
     Instance.new("UIStroke", btn).Color = Color3.fromRGB(60,60,60)
@@ -141,57 +157,64 @@ local function createNavButton(name, order)
     return btn
 end
 
-local espNavButton    = createNavButton("ESP",1)
-local playerNavButton = createNavButton("PLAYER",2)
+local espNavButton    = createNavButton("ESP",    1)
+local playerNavButton = createNavButton("PLAYER", 2)
 
--- Contenido de ESP
+-- Contenido de la sección ESP
 local espContent = Instance.new("Frame", contentFrame)
 espContent.Size = UDim2.new(1,0,1,0)
 espContent.BackgroundTransparency = 1
-local espButton = Instance.new("TextButton", espContent)
-espButton.Size     = UDim2.new(0.8,0,0,40)
-espButton.Position = UDim2.new(0.1,0,0.1,0)
-espButton.Text     = "ESP: OFF"
-espButton.TextSize = 14
-espButton.Font     = Enum.Font.GothamBold
-espButton.TextColor3       = Color3.new(1,1,1)
-espButton.BackgroundColor3 = Color3.fromRGB(200,60,60)
-espButton.BorderSizePixel  = 0
-Instance.new("UICorner", espButton).CornerRadius = UDim.new(0,8)
-Instance.new("UIStroke", espButton).Thickness = 2
-Instance.new("UIStroke", espButton).Color = Color3.fromRGB(50,50,50)
 
--- Contenido de PLAYER
+local espToggle = Instance.new("TextButton", espContent)
+espToggle.Size     = UDim2.new(0.8,0,0,40)
+espToggle.Position = UDim2.new(0.1,0,0.1,0)
+espToggle.Text     = "ESP: OFF"
+espToggle.TextSize = 14
+espToggle.Font     = Enum.Font.GothamBold
+espToggle.TextColor3       = Color3.new(1,1,1)
+espToggle.BackgroundColor3 = Color3.fromRGB(200,60,60)
+espToggle.BorderSizePixel  = 0
+Instance.new("UICorner", espToggle).CornerRadius = UDim.new(0,8)
+local espStroke = Instance.new("UIStroke", espToggle)
+espStroke.Thickness = 2
+espStroke.Color = Color3.fromRGB(50,50,50)
+
+-- Contenido de la sección PLAYER
 local playerContent = Instance.new("Frame", contentFrame)
 playerContent.Size = UDim2.new(1,0,1,0)
 playerContent.BackgroundTransparency = 1
--- Botón Walkhack
-local walkButton = Instance.new("TextButton", playerContent)
-walkButton.Size     = UDim2.new(0.8,0,0,40)
-walkButton.Position = UDim2.new(0.1,0,0.1,0)
-walkButton.Text     = "WALKHACK: OFF"
-walkButton.TextSize = 14
-walkButton.Font     = Enum.Font.GothamBold
-walkButton.TextColor3       = Color3.new(1,1,1)
-walkButton.BackgroundColor3 = Color3.fromRGB(200,60,60)
-walkButton.BorderSizePixel  = 0
-Instance.new("UICorner", walkButton).CornerRadius = UDim.new(0,8)
-Instance.new("UIStroke", walkButton).Thickness = 2
-Instance.new("UIStroke", walkButton).Color = Color3.fromRGB(50,50,50)
--- Botón Fly
-local flyButton = Instance.new("TextButton", playerContent)
-flyButton.Size     = UDim2.new(0.8,0,0,40)
-flyButton.Position = UDim2.new(0.1,0,0.22,0)
-flyButton.Text     = "FLY: OFF"
-flyButton.TextSize = 14
-flyButton.Font     = Enum.Font.GothamBold
-flyButton.TextColor3       = Color3.new(1,1,1)
-flyButton.BackgroundColor3 = Color3.fromRGB(200,60,60)
-flyButton.BorderSizePixel  = 0
-Instance.new("UICorner", flyButton).CornerRadius = UDim.new(0,8)
-Instance.new("UIStroke", flyButton).Thickness = 2
-Instance.new("UIStroke", flyButton).Color = Color3.fromRGB(50,50,50)
--- Etiqueta velocidad
+
+-- Walkhack
+local walkToggle = Instance.new("TextButton", playerContent)
+walkToggle.Size     = UDim2.new(0.8,0,0,40)
+walkToggle.Position = UDim2.new(0.1,0,0.1,0)
+walkToggle.Text     = "WALKHACK: OFF"
+walkToggle.TextSize = 14
+walkToggle.Font     = Enum.Font.GothamBold
+walkToggle.TextColor3       = Color3.new(1,1,1)
+walkToggle.BackgroundColor3 = Color3.fromRGB(200,60,60)
+walkToggle.BorderSizePixel  = 0
+Instance.new("UICorner", walkToggle).CornerRadius = UDim.new(0,8)
+local walkStroke = Instance.new("UIStroke", walkToggle)
+walkStroke.Thickness = 2
+walkStroke.Color = Color3.fromRGB(50,50,50)
+
+-- Fly
+local flyToggle = Instance.new("TextButton", playerContent)
+flyToggle.Size     = UDim2.new(0.8,0,0,40)
+flyToggle.Position = UDim2.new(0.1,0,0.22,0)
+flyToggle.Text     = "FLY: OFF"
+flyToggle.TextSize = 14
+flyToggle.Font     = Enum.Font.GothamBold
+flyToggle.TextColor3       = Color3.new(1,1,1)
+flyToggle.BackgroundColor3 = Color3.fromRGB(200,60,60)
+flyToggle.BorderSizePixel  = 0
+Instance.new("UICorner", flyToggle).CornerRadius = UDim.new(0,8)
+local flyStroke = Instance.new("UIStroke", flyToggle)
+flyStroke.Thickness = 2
+flyStroke.Color = Color3.fromRGB(50,50,50)
+
+-- Speed label y botones +/- 50
 local speedLabel = Instance.new("TextLabel", playerContent)
 speedLabel.Size     = UDim2.new(0.8,0,0,25)
 speedLabel.Position = UDim2.new(0.1,0,0.36,0)
@@ -202,7 +225,7 @@ speedLabel.TextColor3       = Color3.new(1,1,1)
 speedLabel.BackgroundColor3 = Color3.fromRGB(60,60,60)
 speedLabel.BorderSizePixel  = 0
 Instance.new("UICorner", speedLabel).CornerRadius = UDim.new(0,8)
--- Botones +50 / -50
+
 local upButton = Instance.new("TextButton", playerContent)
 upButton.Size     = UDim2.new(0.35,0,0,25)
 upButton.Position = UDim2.new(0.1,0,0.46,0)
@@ -213,8 +236,9 @@ upButton.TextColor3       = Color3.new(1,1,1)
 upButton.BackgroundColor3 = Color3.fromRGB(60,200,60)
 upButton.BorderSizePixel  = 0
 Instance.new("UICorner", upButton).CornerRadius = UDim.new(0,8)
-Instance.new("UIStroke", upButton).Thickness = 2
-Instance.new("UIStroke", upButton).Color = Color3.fromRGB(50,50,50)
+local upStroke2 = Instance.new("UIStroke", upButton)
+upStroke2.Thickness = 2
+upStroke2.Color = Color3.fromRGB(50,50,50)
 
 local downButton = Instance.new("TextButton", playerContent)
 downButton.Size     = UDim2.new(0.35,0,0,25)
@@ -226,10 +250,11 @@ downButton.TextColor3       = Color3.new(1,1,1)
 downButton.BackgroundColor3 = Color3.fromRGB(200,60,60)
 downButton.BorderSizePixel  = 0
 Instance.new("UICorner", downButton).CornerRadius = UDim.new(0,8)
-Instance.new("UIStroke", downButton).Thickness = 2
-Instance.new("UIStroke", downButton).Color = Color3.fromRGB(50,50,50)
+local downStroke2 = Instance.new("UIStroke", downButton)
+downStroke2.Thickness = 2
+downStroke2.Color = Color3.fromRGB(50,50,50)
 
--- Función para alternar secciones y resaltar la seleccionada
+-- Mostrar sección activa en navegación
 local currentSection = "ESP"
 local function updateNav()
     if currentSection == "ESP" then
@@ -256,7 +281,7 @@ espNavButton.MouseButton1Click:Connect(function() showSection("ESP") end)
 playerNavButton.MouseButton1Click:Connect(function() showSection("PLAYER") end)
 updateNav()
 
--- Walkhack (ajuste de velocidad)
+-- Walkhack (funciones)
 local walkUpdateConnection
 local function applyWalkhack()
     local char = player.Character
@@ -267,8 +292,8 @@ local function applyWalkhack()
 end
 local function toggleWalkhack()
     walkhackEnabled = not walkhackEnabled
-    walkButton.Text = walkhackEnabled and "WALKHACK: ON" or "WALKHACK: OFF"
-    walkButton.BackgroundColor3 = walkhackEnabled and Color3.fromRGB(60,200,60) or Color3.fromRGB(200,60,60)
+    walkToggle.Text = walkhackEnabled and "WALKHACK: ON" or "WALKHACK: OFF"
+    walkToggle.BackgroundColor3 = walkhackEnabled and Color3.fromRGB(60,200,60) or Color3.fromRGB(200,60,60)
     if walkhackEnabled then
         applyWalkhack()
         if not walkUpdateConnection then
@@ -283,7 +308,7 @@ local function toggleWalkhack()
     end
 end
 
--- Vuelo
+-- Fly (funciones)
 local function startFlying()
     local char = player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
@@ -318,17 +343,17 @@ local function stopFlying()
 end
 local function toggleFly()
     flyEnabled = not flyEnabled
-    flyButton.Text = flyEnabled and "FLY: ON" or "FLY: OFF"
-    flyButton.BackgroundColor3 = flyEnabled and Color3.fromRGB(60,200,60) or Color3.fromRGB(200,60,60)
-    ascendButton.Visible = flyEnabled
-    descendButton.Visible= flyEnabled
+    flyToggle.Text = flyEnabled and "FLY: ON" or "FLY: OFF"
+    flyToggle.BackgroundColor3 = flyEnabled and Color3.fromRGB(60,200,60) or Color3.fromRGB(200,60,60)
+    ascendButton.Visible  = flyEnabled
+    descendButton.Visible = flyEnabled
     if flyEnabled then startFlying() else stopFlying() end
 end
 
--- ESP
+-- ESP (funciones)
 local function removeESP(target)
     if espFolders[target] then espFolders[target]:Destroy() espFolders[target] = nil end
-    if espUpdateConnections[target] then espUpdateConnections[target]:Disconnect() espUpdateConnections[target]=nil end
+    if espUpdateConnections[target] then espUpdateConnections[target]:Disconnect() espUpdateConnections[target] = nil end
 end
 local function createESP(target)
     if not espEnabled or target == player or espFolders[target] then return end
@@ -363,20 +388,20 @@ local function createESP(target)
         billboard.AlwaysOnTop = true
         billboard.MaxDistance = 1000
         local label = Instance.new("TextLabel", billboard)
-        label.Size   = UDim2.new(1,0,1,0)
+        label.Size               = UDim2.new(1,0,1,0)
         label.BackgroundTransparency = 1
-        label.Text   = target.Name.." ["..math.floor(hum.Health).." HP]"
-        label.TextColor3 = Color3.new(1,1,1)
-        label.TextSize   = 20
-        label.Font       = Enum.Font.GothamBold
+        label.Text               = target.Name.." ["..math.floor(hum.Health).." HP]"
+        label.TextColor3         = Color3.new(1,1,1)
+        label.TextSize           = 20
+        label.Font               = Enum.Font.GothamBold
         local line = Instance.new("LineHandleAdornment", folder)
         line.Adornee     = workspace.Terrain
         line.ZIndex      = 0
         line.Thickness   = 2
         line.Color3      = Color3.new(1,1,0)
         line.Transparency= 0.5
-        local localChar  = player.Character
-        local localRoot  = localChar and localChar:FindFirstChild("HumanoidRootPart")
+        local localChar = player.Character
+        local localRoot = localChar and localChar:FindFirstChild("HumanoidRootPart")
         if localRoot then
             line.Length = (root.Position - localRoot.Position).Magnitude
             line.CFrame = CFrame.new(localRoot.Position, root.Position)
@@ -386,12 +411,12 @@ local function createESP(target)
 end
 local function toggleESP()
     espEnabled = not espEnabled
-    espButton.Text = espEnabled and "ESP: ON" or "ESP: OFF"
-    espButton.BackgroundColor3 = espEnabled and Color3.fromRGB(60,200,60) or Color3.fromRGB(200,60,60)
+    espToggle.Text = espEnabled and "ESP: ON" or "ESP: OFF"
+    espToggle.BackgroundColor3 = espEnabled and Color3.fromRGB(60,200,60) or Color3.fromRGB(200,60,60)
     if espEnabled then
         for _,p in ipairs(Players:GetPlayers()) do createESP(p) end
         if not playerAddedConnection then
-            playerAddedConnection = Players.PlayerAdded:Connect(function(p) task.delay(1, function() createESP(p) end) end)
+            playerAddedConnection = Players.PlayerAdded:Connect(function(p) task.delay(1,function() createESP(p) end) end)
         end
         if not playerRemovingConnection then
             playerRemovingConnection = Players.PlayerRemoving:Connect(function(p) removeESP(p) end)
@@ -403,25 +428,25 @@ local function toggleESP()
     end
 end
 
--- Mostrar/ocultar menú
+-- Mostrar y ocultar menú
 local menuOpen = false
 local function openMenu()
-    menuOpen           = true
+    menuOpen = true
     mainButton.Visible = false
     menuFrame.Visible  = true
 end
-local function closeMenu()
-    menuOpen           = false
+local function closeMenuFunc()
+    menuOpen = false
     menuFrame.Visible  = false
     mainButton.Visible = true
 end
 
--- Conectar botones
+-- Conexiones de botones y eventos
 mainButton.MouseButton1Click:Connect(openMenu)
-closeButton.MouseButton1Click:Connect(closeMenu)
-espButton.MouseButton1Click:Connect(toggleESP)
-walkButton.MouseButton1Click:Connect(toggleWalkhack)
-flyButton.MouseButton1Click:Connect(toggleFly)
+closeButton.MouseButton1Click:Connect(closeMenuFunc)
+espToggle.MouseButton1Click:Connect(toggleESP)
+walkToggle.MouseButton1Click:Connect(toggleWalkhack)
+flyToggle.MouseButton1Click:Connect(toggleFly)
 
 -- Botones de vuelo
 ascendButton.MouseButton1Down:Connect(function() flyAscend  = true  end)
@@ -441,15 +466,20 @@ downButton.MouseButton1Click:Connect(function()
     applyWalkhack()
 end)
 
--- Reaplicar walkhack tras reaparecer
+-- Reaplicar walkhack al reaparecer
 player.CharacterAdded:Connect(function()
     task.wait(1)
     applyWalkhack()
 end)
 applyWalkhack()
 
--- Drag del menú; al arrastrar se captura el input para que no gire la cámara
-local dragging, dragStart, startButtonPos, startMenuPos, dragInput
+-- Arrastrar el menú sin girar la cámara
+local dragging       = false
+local dragStart      = nil
+local startButtonPos = nil
+local startMenuPos   = nil
+local dragInput      = nil
+
 local function beginDrag(input)
     if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
         dragging       = true
@@ -457,7 +487,7 @@ local function beginDrag(input)
         startButtonPos = mainButton.Position
         startMenuPos   = menuFrame.Position
         dragInput      = input
-        -- Captura todo el input para evitar rotar la cámara del jugador
+        -- Captura el input para evitar que la cámara se mueva durante el arrastre
         UserInputService.ModalEnabled = true
         input.Changed:Connect(function()
             if input.UserInputState == Enum.UserInputState.End then
@@ -491,5 +521,6 @@ menuFrame.InputBegan:Connect(beginDrag)
 menuFrame.InputChanged:Connect(updateDragInput)
 
 -- Mensajes informativos en consola
-print("🎯 ESP + WALKHACK + FLY actualizado con menú multipanel.")
-print("Pulsa 'Menu' para abrir. Usa la barra lateral para cambiar de sección.")
+print("🎯 ESP + WALKHACK + FLY CARGADO CON MENÚ MULTIPANEL CORREGIDO.")
+print("Pulsa 'Menu' para abrir o cerrar. Usa la barra lateral para navegar.")
+print("Mientras arrastras el menú, la cámara no se moverá.")
