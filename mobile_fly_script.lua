@@ -1,34 +1,25 @@
--- 🌿 VERDEFLY SPEED SCRIPT (Móvil + PC)
--- 🚀 Vuelo super rápido con interfaz moderna
+-- 🌿 VerdeSpeed MÓVIL
+-- 🚀 Script de velocidad infinita SOLO para móviles
 
 local Players = game:GetService("Players")
-local RS = game:GetService("RunService")
-
 local plr = Players.LocalPlayer
 
 -- Configuración
-local flyEnabled = false
-local flySpeed = 50
-local bv, bg
-local connection
+local speedEnabled = false
+local walkSpeed = 16 -- velocidad normal por defecto
 
--- Variables de control
-local isUpPressed = false
-local isDownPressed = false
-
--- GUI Moderna
+-- Crear GUI moderna
 local gui = Instance.new("ScreenGui")
-gui.Name = "VerdeFlyGUI"
+gui.Name = "VerdeSpeedMobile"
 gui.ResetOnSpawn = false
 gui.Parent = plr:WaitForChild("PlayerGui")
 
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 250, 0, 180)
-mainFrame.Position = UDim2.new(0.5, -125, 0.7, 0)
+mainFrame.Size = UDim2.new(0, 220, 0, 170)
+mainFrame.Position = UDim2.new(0.75, 0, 0.65, 0) -- parte baja derecha
 mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-mainFrame.BackgroundTransparency = 0.15
+mainFrame.BackgroundTransparency = 0.1
 mainFrame.BorderSizePixel = 0
-mainFrame.AnchorPoint = Vector2.new(0.5,0)
 mainFrame.Parent = gui
 
 local corner = Instance.new("UICorner")
@@ -37,34 +28,34 @@ corner.Parent = mainFrame
 
 -- Título
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1,0,0,40)
-title.Text = "🌿 VerdeFly"
-title.TextSize = 20
+title.Size = UDim2.new(1,0,0,35)
+title.Text = "🌿 VerdeSpeed"
+title.TextSize = 18
 title.Font = Enum.Font.GothamBold
 title.TextColor3 = Color3.new(1,1,1)
 title.BackgroundTransparency = 1
 title.Parent = mainFrame
 
--- Botón Fly
-local flyBtn = Instance.new("TextButton")
-flyBtn.Size = UDim2.new(0.9,0,0,45)
-flyBtn.Position = UDim2.new(0.05,0,0.25,0)
-flyBtn.Text = "FLY: OFF"
-flyBtn.TextSize = 18
-flyBtn.Font = Enum.Font.GothamBold
-flyBtn.TextColor3 = Color3.new(1,1,1)
-flyBtn.BackgroundColor3 = Color3.fromRGB(200,60,60)
-flyBtn.Parent = mainFrame
+-- Botón Speed
+local speedBtn = Instance.new("TextButton")
+speedBtn.Size = UDim2.new(0.9,0,0,40)
+speedBtn.Position = UDim2.new(0.05,0,0.25,0)
+speedBtn.Text = "SPEED: OFF"
+speedBtn.TextSize = 18
+speedBtn.Font = Enum.Font.GothamBold
+speedBtn.TextColor3 = Color3.new(1,1,1)
+speedBtn.BackgroundColor3 = Color3.fromRGB(200,60,60)
+speedBtn.Parent = mainFrame
 
-local flyCorner = Instance.new("UICorner")
-flyCorner.CornerRadius = UDim.new(0,10)
-flyCorner.Parent = flyBtn
+local speedCorner = Instance.new("UICorner")
+speedCorner.CornerRadius = UDim.new(0,10)
+speedCorner.Parent = speedBtn
 
 -- Label Velocidad
 local speedLabel = Instance.new("TextLabel")
-speedLabel.Size = UDim2.new(0.9,0,0,30)
+speedLabel.Size = UDim2.new(0.9,0,0,25)
 speedLabel.Position = UDim2.new(0.05,0,0.55,0)
-speedLabel.Text = "Speed: "..flySpeed
+speedLabel.Text = "Velocidad: "..walkSpeed
 speedLabel.TextSize = 16
 speedLabel.Font = Enum.Font.Gotham
 speedLabel.TextColor3 = Color3.new(1,1,1)
@@ -78,10 +69,10 @@ labelCorner.Parent = speedLabel
 
 -- Botones de velocidad
 local speedUpBtn = Instance.new("TextButton")
-speedUpBtn.Size = UDim2.new(0.42,0,0,35)
-speedUpBtn.Position = UDim2.new(0.05,0,0.8,0)
-speedUpBtn.Text = "➕ Faster"
-speedUpBtn.TextSize = 16
+speedUpBtn.Size = UDim2.new(0.42,0,0,30)
+speedUpBtn.Position = UDim2.new(0.05,0,0.82,0)
+speedUpBtn.Text = "➕"
+speedUpBtn.TextSize = 22
 speedUpBtn.Font = Enum.Font.GothamBold
 speedUpBtn.TextColor3 = Color3.new(1,1,1)
 speedUpBtn.BackgroundColor3 = Color3.fromRGB(60,200,60)
@@ -92,10 +83,10 @@ upCorner.CornerRadius = UDim.new(0,10)
 upCorner.Parent = speedUpBtn
 
 local speedDownBtn = Instance.new("TextButton")
-speedDownBtn.Size = UDim2.new(0.42,0,0,35)
-speedDownBtn.Position = UDim2.new(0.53,0,0.8,0)
-speedDownBtn.Text = "➖ Slower"
-speedDownBtn.TextSize = 16
+speedDownBtn.Size = UDim2.new(0.42,0,0,30)
+speedDownBtn.Position = UDim2.new(0.53,0,0.82,0)
+speedDownBtn.Text = "➖"
+speedDownBtn.TextSize = 22
 speedDownBtn.Font = Enum.Font.GothamBold
 speedDownBtn.TextColor3 = Color3.new(1,1,1)
 speedDownBtn.BackgroundColor3 = Color3.fromRGB(200,60,60)
@@ -105,105 +96,51 @@ local downCorner = Instance.new("UICorner")
 downCorner.CornerRadius = UDim.new(0,10)
 downCorner.Parent = speedDownBtn
 
--- Función de vuelo
-local function flyUpdate()
-    if not flyEnabled then return end
+-- Función principal
+local function toggleSpeed()
+    local humanoid = plr.Character and plr.Character:FindFirstChild("Humanoid")
+    if not humanoid then return end
 
-    local chr = plr.Character
-    if not chr or not chr:FindFirstChild("HumanoidRootPart") then return end
+    speedEnabled = not speedEnabled
 
-    local hrp = chr.HumanoidRootPart
-    local humanoid = chr:FindFirstChild("Humanoid")
-    local cam = workspace.CurrentCamera
-
-    if not bv or not bg then return end
-
-    local moveVector = Vector3.new(0,0,0)
-
-    if humanoid and humanoid.MoveDirection.Magnitude > 0 then
-        local camCF = cam.CFrame
-        local forward = Vector3.new(camCF.LookVector.X, 0, camCF.LookVector.Z).Unit
-        local right = Vector3.new(camCF.RightVector.X, 0, camCF.RightVector.Z).Unit
-
-        local inputDir = humanoid.MoveDirection
-        moveVector = (forward * inputDir.Z + right * inputDir.X).Unit
-    end
-
-    -- movimiento vertical
-    local verticalMovement = 0
-    if isUpPressed then verticalMovement = 1 end
-    if isDownPressed then verticalMovement = -1 end
-
-    local finalVector = Vector3.new(moveVector.X, verticalMovement, moveVector.Z)
-
-    bv.Velocity = finalVector * flySpeed
-
-    if moveVector.Magnitude > 0.1 then
-        local lookDirection = (cam.CFrame.LookVector * Vector3.new(1,0,1)).Unit
-        if lookDirection.Magnitude > 0 then
-            bg.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + lookDirection)
-        end
-    end
-end
-
--- Toggle Fly
-local function toggleFly()
-    local chr = plr.Character
-    if not chr or not chr:FindFirstChild("HumanoidRootPart") then return end
-
-    local hrp = chr.HumanoidRootPart
-    local humanoid = chr:FindFirstChild("Humanoid")
-
-    flyEnabled = not flyEnabled
-
-    if flyEnabled then
-        flyBtn.Text = "FLY: ON"
-        flyBtn.BackgroundColor3 = Color3.fromRGB(60,200,60)
-
-        if bv then bv:Destroy() end
-        if bg then bg:Destroy() end
-
-        bv = Instance.new("BodyVelocity")
-        bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-        bv.Parent = hrp
-
-        bg = Instance.new("BodyGyro")
-        bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-        bg.D = 2000
-        bg.P = 10000
-        bg.CFrame = hrp.CFrame
-        bg.Parent = hrp
-
-        if humanoid then humanoid.PlatformStand = true end
+    if speedEnabled then
+        speedBtn.Text = "SPEED: ON"
+        speedBtn.BackgroundColor3 = Color3.fromRGB(60,200,60)
+        humanoid.WalkSpeed = walkSpeed
     else
-        flyBtn.Text = "FLY: OFF"
-        flyBtn.BackgroundColor3 = Color3.fromRGB(200,60,60)
-
-        if bv then bv:Destroy() bv=nil end
-        if bg then bg:Destroy() bg=nil end
-
-        if humanoid then humanoid.PlatformStand = false end
+        speedBtn.Text = "SPEED: OFF"
+        speedBtn.BackgroundColor3 = Color3.fromRGB(200,60,60)
+        humanoid.WalkSpeed = 16 -- reset normal
     end
 end
 
--- Conexiones
-flyBtn.MouseButton1Click:Connect(toggleFly)
+-- Eventos botones
+speedBtn.MouseButton1Click:Connect(toggleSpeed)
 
 speedUpBtn.MouseButton1Click:Connect(function()
-    flySpeed = flySpeed + 25 -- sin límite máximo
-    speedLabel.Text = "Speed: "..flySpeed
+    walkSpeed = walkSpeed + 10 -- sin límite
+    if speedEnabled and plr.Character and plr.Character:FindFirstChild("Humanoid") then
+        plr.Character.Humanoid.WalkSpeed = walkSpeed
+    end
+    speedLabel.Text = "Velocidad: "..walkSpeed
 end)
 
 speedDownBtn.MouseButton1Click:Connect(function()
-    flySpeed = math.max(flySpeed - 25, 1) -- mínimo 1
-    speedLabel.Text = "Speed: "..flySpeed
+    walkSpeed = math.max(walkSpeed - 10, 1) -- mínimo 1
+    if speedEnabled and plr.Character and plr.Character:FindFirstChild("Humanoid") then
+        plr.Character.Humanoid.WalkSpeed = walkSpeed
+    end
+    speedLabel.Text = "Velocidad: "..walkSpeed
 end)
 
-connection = RS.Heartbeat:Connect(flyUpdate)
-
-plr.CharacterAdded:Connect(function()
-    task.wait(1)
-    if flyEnabled then toggleFly() end
+-- Reset cuando reaparece
+plr.CharacterAdded:Connect(function(char)
+    local hum = char:WaitForChild("Humanoid")
+    if not speedEnabled then
+        hum.WalkSpeed = 16
+    else
+        hum.WalkSpeed = walkSpeed
+    end
 end)
 
-print("🌿 VerdeFly Speed cargado 🚀")
+print("🌿 VerdeSpeed Mobile cargado 🚀")
