@@ -1,5 +1,5 @@
--- Fly, Speed, ESP, Lock-On, Noclip y Find para móviles.
--- Colócalo en un LocalScript dentro de StarterPlayerScripts o StarterGui.
+-- Fly, Speed, ESP, Lock-On, Noclip y Empty Server para móviles.
+-- Coloca este LocalScript en StarterPlayerScripts o StarterGui (PlayerGui).
 
 local Players         = game:GetService("Players")
 local RunService      = game:GetService("RunService")
@@ -16,9 +16,9 @@ screenGui.IgnoreGuiInset = true
 screenGui.DisplayOrder   = 100
 screenGui.Parent         = playerGui
 
--- Botón circular para abrir el menú
+-- Botón circular
 local dragFrame = Instance.new("Frame", screenGui)
-dragFrame.Size  = UDim2.new(0, 60, 0, 60)
+dragFrame.Size     = UDim2.new(0,60,0,60)
 dragFrame.Position = UDim2.new(0.5,-30,0.5,-30)
 dragFrame.BackgroundTransparency = 1
 dragFrame.Active  = true
@@ -69,7 +69,7 @@ closeBtn.BorderSizePixel  = 0
 closeBtn.ZIndex           = 101
 Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0.5,0)
 
--- Helper para crear botones del menú
+-- Helper para crear botones en dos columnas
 local function createToggleButton(name,text,pos,color)
     local btn = Instance.new("TextButton", menuFrame)
     btn.Name             = name
@@ -85,15 +85,15 @@ local function createToggleButton(name,text,pos,color)
     return btn
 end
 
--- Botones en el menú principal (dos columnas, tres filas)
-local flyToggleBtn    = createToggleButton("FlyToggle","Fly OFF",   UDim2.new(0,10,0,40),  Color3.fromRGB(220,45,45))
-local espToggleBtn    = createToggleButton("ESPToggle","ESP OFF",   UDim2.new(0,130,0,40), Color3.fromRGB(45,140,220))
-local speedToggleBtn  = createToggleButton("SpeedToggle","Speed OFF",UDim2.new(0,10,0,90), Color3.fromRGB(45,220,120))
-local lockToggleBtn   = createToggleButton("LockToggle","Lock OFF", UDim2.new(0,130,0,90), Color3.fromRGB(140,120,220))
+-- Botones del menú (dos columnas, tres filas)
+local flyToggleBtn    = createToggleButton("FlyToggle",   "Fly OFF",   UDim2.new(0,10,0,40),  Color3.fromRGB(220,45,45))
+local espToggleBtn    = createToggleButton("ESPToggle",   "ESP OFF",   UDim2.new(0,130,0,40), Color3.fromRGB(45,140,220))
+local speedToggleBtn  = createToggleButton("SpeedToggle", "Speed OFF", UDim2.new(0,10,0,90), Color3.fromRGB(45,220,120))
+local lockToggleBtn   = createToggleButton("LockToggle",  "Lock OFF",  UDim2.new(0,130,0,90), Color3.fromRGB(140,120,220))
 local noclipToggleBtn = createToggleButton("NoclipToggle","Noclip OFF",UDim2.new(0,10,0,140),Color3.fromRGB(220,90,45))
-local findToggleBtn   = createToggleButton("FindToggle","Find",     UDim2.new(0,130,0,140),Color3.fromRGB(100,170,220))
+local emptyServerBtn  = createToggleButton("EmptyServer","Empty Server",UDim2.new(0,130,0,140),Color3.fromRGB(100,170,220))
 
--- Botones laterales (ascenso, descenso, control de velocidad)
+-- Botones laterales (ascenso, descenso, velocidad)
 local ascendBtn = Instance.new("TextButton", screenGui)
 ascendBtn.Size             = UDim2.new(0,50,0,50)
 ascendBtn.Position         = UDim2.new(0.88,0,0.48,0)
@@ -142,98 +142,37 @@ speedDownBtn.BorderSizePixel  = 0
 speedDownBtn.Visible          = false
 speedDownBtn.ZIndex           = 101
 
--- Menú de búsqueda de jugador
-local findFrame = Instance.new("Frame", screenGui)
-findFrame.Name             = "FindFrame"
-findFrame.Size             = UDim2.new(0,260,0,160)
-findFrame.Position         = UDim2.new(0.5,-130,0.5,-80)
-findFrame.BackgroundColor3 = Color3.fromRGB(25,25,25)
-findFrame.Visible          = false
-findFrame.Active           = true
-findFrame.ZIndex           = 100
-Instance.new("UICorner", findFrame).CornerRadius = UDim.new(0,8)
-
-local findTitle = Instance.new("TextLabel", findFrame)
-findTitle.Size              = UDim2.new(1,-40,0,24)
-findTitle.Position          = UDim2.new(0,20,0,8)
-findTitle.BackgroundTransparency = 1
-findTitle.TextColor3        = Color3.new(1,1,1)
-findTitle.Font              = Enum.Font.GothamBold
-findTitle.TextSize          = 20
-findTitle.TextXAlignment    = Enum.TextXAlignment.Left
-findTitle.Text              = "Buscar jugador"
-findTitle.ZIndex            = 101
-
-local findBackBtn = Instance.new("TextButton", findFrame)
-findBackBtn.Size             = UDim2.new(0,24,0,24)
-findBackBtn.Position         = UDim2.new(1,-32,0,8)
-findBackBtn.BackgroundColor3 = Color3.fromRGB(220,45,45)
-findBackBtn.TextColor3       = Color3.new(1,1,1)
-findBackBtn.Font             = Enum.Font.GothamBold
-findBackBtn.TextSize         = 18
-findBackBtn.Text             = "×"
-findBackBtn.BorderSizePixel  = 0
-findBackBtn.ZIndex           = 101
-Instance.new("UICorner", findBackBtn).CornerRadius = UDim.new(0.5,0)
-
-local playerNameBox = Instance.new("TextBox", findFrame)
-playerNameBox.Size             = UDim2.new(1,-40,0,40)
-playerNameBox.Position         = UDim2.new(0,20,0,50)
-playerNameBox.BackgroundColor3 = Color3.fromRGB(35,35,35)
-playerNameBox.TextColor3       = Color3.new(1,1,1)
-playerNameBox.Font             = Enum.Font.Gotham
-playerNameBox.TextSize         = 18
-playerNameBox.PlaceholderText  = "Nombre de usuario"
-playerNameBox.Text             = ""
-playerNameBox.ClearTextOnFocus = false
-playerNameBox.ZIndex           = 101
-Instance.new("UICorner", playerNameBox).CornerRadius = UDim.new(0,4)
-
-local searchBtn = Instance.new("TextButton", findFrame)
-searchBtn.Size             = UDim2.new(0,120,0,40)
-searchBtn.Position         = UDim2.new(0.5,-60,0,100)
-searchBtn.BackgroundColor3 = Color3.fromRGB(45,130,220)
-searchBtn.TextColor3       = Color3.new(1,1,1)
-searchBtn.Font             = Enum.Font.GothamBold
-searchBtn.TextSize         = 18
-searchBtn.Text             = "Buscar"
-searchBtn.BorderSizePixel  = 0
-searchBtn.ZIndex           = 101
-Instance.new("UICorner", searchBtn).CornerRadius = UDim.new(0,4)
-
 -- Variables de estado
 local flying = false
 local bodyGyro, bodyVel, flyConnection
 local ascend, descend = false, false
 
-local espEnabled        = false
+local espEnabled     = false
 local currentHighlights = {}
-local espConnections    = {}
+local espConnections = {}
 local espGlobalConnection
 
-local speedEnabled = false
+local speedEnabled   = false
 local originalWalkSpeed
 local currentSpeed
-local speedIncrement   = 4
-local maxSpeed         = 100
+local speedIncrement = 4
+local maxSpeed       = 100
 local speedConnection
 
-local noclipEnabled   = false
-local noclipSpeed     = 50
+local noclipEnabled  = false
+local noclipSpeed    = 50
 local noclipBodyGyro
 local noclipBodyVel
 local noclipConnection
 local noclipCollisionConn
 
--- Objetivo de los botones de velocidad:
--- "walk" para ajustar WalkSpeed, "noclip" para ajustar noclipSpeed.
-local speedTarget = nil
+local speedTarget    = nil -- "walk" o "noclip" según el modo activo
 
 local lockEnabled     = false
 local targetCharacter
 local lockConnection
 
--- Funciones para habilitar/deshabilitar colisiones
+-- Funciones de colisión
 local function setCharacterCollision(enabled)
     local char = localPlayer.Character
     if not char then return end
@@ -244,21 +183,21 @@ local function setCharacterCollision(enabled)
     end
 end
 
--- Noclip: permite volar atravesando colisiones
+-- Noclip
 local function startNoclip()
     local char = localPlayer.Character or localPlayer.CharacterAdded:Wait()
     local hrp  = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
     setCharacterCollision(false)
-    noclipBodyGyro      = Instance.new("BodyGyro")
-    noclipBodyGyro.P    = 9e4
+    noclipBodyGyro           = Instance.new("BodyGyro")
+    noclipBodyGyro.P         = 9e4
     noclipBodyGyro.MaxTorque = Vector3.new(math.huge,math.huge,math.huge)
-    noclipBodyGyro.Parent = hrp
-    noclipBodyVel      = Instance.new("BodyVelocity")
-    noclipBodyVel.MaxForce = Vector3.new(math.huge,math.huge,math.huge)
-    noclipBodyVel.P    = 9e4
-    noclipBodyVel.Parent = hrp
-    noclipConnection   = RunService.RenderStepped:Connect(function()
+    noclipBodyGyro.Parent    = hrp
+    noclipBodyVel            = Instance.new("BodyVelocity")
+    noclipBodyVel.MaxForce   = Vector3.new(math.huge,math.huge,math.huge)
+    noclipBodyVel.P          = 9e4
+    noclipBodyVel.Parent     = hrp
+    noclipConnection         = RunService.RenderStepped:Connect(function()
         local dir = Vector3.new()
         local char2 = localPlayer.Character
         if char2 then
@@ -290,7 +229,7 @@ local function stopNoclip()
     if noclipBodyVel       then noclipBodyVel:Destroy()       noclipBodyVel       = nil end
 end
 
--- Vuela normal
+-- Fly
 local function startFly()
     local char = localPlayer.Character or localPlayer.CharacterAdded:Wait()
     local hrp  = char:FindFirstChild("HumanoidRootPart")
@@ -328,7 +267,7 @@ local function stopFly()
     if bodyVel       then bodyVel:Destroy()       bodyVel       = nil end
 end
 
--- ESP robusto
+-- ESP
 local function enableESP()
     espEnabled = true
     local function highlightPlayer(plr, character)
@@ -362,15 +301,13 @@ local function enableESP()
     end
     if not espGlobalConnection then
         espGlobalConnection = Players.PlayerAdded:Connect(function(plr)
-            if plr ~= localPlayer then
-                if espEnabled then
-                    highlightPlayer(plr, plr.Character)
-                    espConnections[plr] = plr.CharacterAdded:Connect(function(char)
-                        if espEnabled then
-                            task.defer(function() highlightPlayer(plr, char) end)
-                        end
-                    end)
-                end
+            if plr ~= localPlayer and espEnabled then
+                highlightPlayer(plr, plr.Character)
+                espConnections[plr] = plr.CharacterAdded:Connect(function(char)
+                    if espEnabled then
+                        task.defer(function() highlightPlayer(plr, char) end)
+                    end
+                end)
             end
         end)
     end
@@ -402,7 +339,7 @@ local function enableSpeed()
             originalWalkSpeed = originalWalkSpeed or hum.WalkSpeed
             currentSpeed      = math.max(hum.WalkSpeed*2, originalWalkSpeed)
             if currentSpeed > maxSpeed then currentSpeed = maxSpeed end
-            hum.WalkSpeed     = currentSpeed
+            hum.WalkSpeed = currentSpeed
             speedUpBtn.Visible   = true
             speedDownBtn.Visible = true
             if speedConnection then speedConnection:Disconnect() end
@@ -435,8 +372,8 @@ end
 local function findTarget()
     local cam = workspace.CurrentCamera
     if not cam then return nil end
-    local camPos = cam.CFrame.Position
-    local camDir = cam.CFrame.LookVector
+    local camPos   = cam.CFrame.Position
+    local camDir   = cam.CFrame.LookVector
     local bestTarget = nil
     local bestDot    = 0.9
     for _, plr in ipairs(Players:GetPlayers()) do
@@ -444,8 +381,8 @@ local function findTarget()
             local char = plr.Character
             local root = char and char:FindFirstChild("HumanoidRootPart")
             if root then
-                local vec = root.Position - camPos
-                local dist= vec.Magnitude
+                local vec  = root.Position - camPos
+                local dist = vec.Magnitude
                 if dist < 200 then
                     local dir  = vec/dist
                     local dot  = dir:Dot(camDir)
@@ -466,7 +403,7 @@ local function startLock()
     lockConnection = RunService.RenderStepped:Connect(function()
         if not targetCharacter or not targetCharacter.Parent then
             if lockConnection then lockConnection:Disconnect() lockConnection = nil end
-            lockEnabled      = false
+            lockEnabled       = false
             lockToggleBtn.Text = "Lock OFF"
             return
         end
@@ -496,7 +433,7 @@ task.spawn(function()
                 originalWalkSpeed = originalWalkSpeed or hum.WalkSpeed
                 currentSpeed      = currentSpeed or math.min(originalWalkSpeed*2, maxSpeed)
                 hum.WalkSpeed     = currentSpeed
-                speedUpBtn.Visible = true
+                speedUpBtn.Visible   = true
                 speedDownBtn.Visible = true
             end
         end
@@ -505,7 +442,7 @@ task.spawn(function()
     localPlayer.CharacterAdded:Connect(onCharacter)
 end)
 
--- Limpiar ESP cuando un jugador abandona
+-- Limpieza del ESP cuando un jugador abandona
 Players.PlayerRemoving:Connect(function(plr)
     if espConnections[plr] then
         espConnections[plr]:Disconnect()
@@ -517,12 +454,12 @@ Players.PlayerRemoving:Connect(function(plr)
     end
 end)
 
--- Conexiones de botones del menú
+-- Acciones de los botones del menú
 flyToggleBtn.MouseButton1Click:Connect(function()
     flying = not flying
     flyToggleBtn.Text = flying and "Fly ON" or "Fly OFF"
-    ascendBtn.Visible  = flying
-    descendBtn.Visible = flying
+    ascendBtn.Visible  = flying or noclipEnabled
+    descendBtn.Visible = flying or noclipEnabled
     if flying then
         startFly()
     else
@@ -587,6 +524,7 @@ noclipToggleBtn.MouseButton1Click:Connect(function()
     else
         noclipEnabled       = true
         noclipToggleBtn.Text = "Noclip ON"
+        -- Desactivar Fly y Speed mientras se activa Noclip
         if flying then
             flying            = false
             flyToggleBtn.Text = "Fly OFF"
@@ -607,51 +545,20 @@ noclipToggleBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- Nuevo: al pulsar "Find", mostrar el submenú de búsqueda
-findToggleBtn.MouseButton1Click:Connect(function()
-    menuFrame.Visible = false
-    findFrame.Visible = true
-end)
-
--- Volver al menú principal desde el submenú
-findBackBtn.MouseButton1Click:Connect(function()
-    findFrame.Visible = false
-    menuFrame.Visible = true
-end)
-
--- Botón Buscar: obtener UserId, buscar instancia y teletransportarse
-searchBtn.MouseButton1Click:Connect(function()
-    local name = playerNameBox.Text or ""
-    name       = name:match("^%s*(.-)%s*$")  -- eliminar espacios extras
-    if name == "" then
-        warn("Debe ingresar un nombre de usuario válido")
-        return
-    end
-    local success, userIdOrErr = pcall(function()
-        return Players:GetUserIdFromNameAsync(name)
+-- Botón para unirse a un servidor vacío
+emptyServerBtn.MouseButton1Click:Connect(function()
+    -- Crear opciones de teletransporte para reservar un servidor nuevo
+    local options = Instance.new("TeleportOptions")
+    options.ShouldReserveServer = true
+    local success, err = pcall(function()
+        TeleportService:TeleportAsync(game.PlaceId, {localPlayer}, options)
     end)
     if not success then
-        warn("No se pudo obtener el usuario: " .. tostring(userIdOrErr))
-        return
-    end
-    local userId = userIdOrErr
-    local success2, placeId, instanceId = pcall(function()
-        local place, instance = TeleportService:GetPlayerPlaceInstanceAsync(userId)
-        return place, instance
-    end)
-    if success2 and placeId and instanceId then
-        local tpSuccess, tpErr = pcall(function()
-            TeleportService:TeleportToPlaceInstance(placeId, instanceId, localPlayer)
-        end)
-        if not tpSuccess then
-            warn("Falló el teletransporte: " .. tostring(tpErr))
-        end
-    else
-        warn("No se pudo encontrar la instancia del jugador. Puede que esté en otro lugar o en un servidor privado.")
+        warn("No se pudo teletransportar a un servidor vacío: " .. tostring(err))
     end
 end)
 
--- Ajustar velocidades con flechas
+-- Ajustar la velocidad con flechas
 speedUpBtn.MouseButton1Click:Connect(function()
     if speedTarget == "walk" and speedEnabled then
         local char = localPlayer.Character
@@ -734,6 +641,5 @@ end
 makeDraggable(dragFrame)
 makeDraggable(menuFrame)
 makeDraggable(openBtn)
-makeDraggable(findFrame)
 
-print("✅ Fly, ESP, Speed, Lock, Noclip y Find cargados")
+print("✅ Fly, ESP, Speed, Lock, Noclip y Empty Server cargados")
