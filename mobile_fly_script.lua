@@ -1,6 +1,5 @@
 -- Fly, Speed y ESP con menú móvil para móviles.
--- Coloca este LocalScript en StarterPlayerScripts o StarterGui.
--- Úsalo sólo en tus propios proyectos; abusar de estas funciones en juegos públicos puede violar los Términos de Roblox.
+-- Úsalo sólo en tus propios proyectos; modificar velocidades en juegos públicos puede incumplir los Términos de Roblox.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -16,7 +15,7 @@ screenGui.IgnoreGuiInset = true
 screenGui.DisplayOrder = 100
 screenGui.Parent = playerGui
 
--- Botón circular para abrir el menú
+-- Botón circular
 local dragFrame = Instance.new("Frame", screenGui)
 dragFrame.Size = UDim2.new(0,60,0,60)
 dragFrame.Position = UDim2.new(0.5,-30,0.5,-30)
@@ -88,16 +87,16 @@ local function createToggleButton(name, text, pos, color)
     return btn
 end
 
--- Botones del menú
+-- Botones de Fly, ESP y Speed
 local flyToggleBtn   = createToggleButton("FlyToggle","Fly OFF",   UDim2.new(0.5,-70,0,50),  Color3.fromRGB(220,45,45))
 local espToggleBtn   = createToggleButton("ESPToggle","ESP OFF",   UDim2.new(0.5,-70,0,100), Color3.fromRGB(45,140,220))
 local speedToggleBtn = createToggleButton("SpeedToggle","Speed OFF",UDim2.new(0.5,-70,0,150),Color3.fromRGB(45,220,120))
 
--- Botones de vuelo (fuera del menú)
+-- Botones de vuelo en la parte derecha de la pantalla
 local ascendBtn = Instance.new("TextButton", screenGui)
 ascendBtn.Name = "AscendBtn"
 ascendBtn.Size = UDim2.new(0,50,0,50)
-ascendBtn.Position = UDim2.new(0.88,0,0.55,0) -- lado derecho, por la mitad
+ascendBtn.Position = UDim2.new(0.88,0,0.50,0)
 ascendBtn.BackgroundColor3 = Color3.fromRGB(220,45,45)
 ascendBtn.TextColor3 = Color3.new(1,1,1)
 ascendBtn.Font = Enum.Font.GothamBold
@@ -110,7 +109,7 @@ ascendBtn.ZIndex = 101
 local descendBtn = Instance.new("TextButton", screenGui)
 descendBtn.Name = "DescendBtn"
 descendBtn.Size = UDim2.new(0,50,0,50)
-descendBtn.Position = UDim2.new(0.88,0,0.65,0)
+descendBtn.Position = UDim2.new(0.88,0,0.62,0)
 descendBtn.BackgroundColor3 = Color3.fromRGB(160,25,25)
 descendBtn.TextColor3 = Color3.new(1,1,1)
 descendBtn.Font = Enum.Font.GothamBold
@@ -120,11 +119,11 @@ descendBtn.BorderSizePixel = 0
 descendBtn.Visible = false
 descendBtn.ZIndex = 101
 
--- Botones de velocidad (fuera del menú)
+-- Botones de velocidad en la parte derecha pero más a la izquierda
 local speedUpBtn = Instance.new("TextButton", screenGui)
 speedUpBtn.Name = "SpeedUpBtn"
 speedUpBtn.Size = UDim2.new(0,50,0,50)
-speedUpBtn.Position = UDim2.new(0.78,0,0.55,0)
+speedUpBtn.Position = UDim2.new(0.74,0,0.50,0)
 speedUpBtn.BackgroundColor3 = Color3.fromRGB(45,220,120)
 speedUpBtn.TextColor3 = Color3.new(1,1,1)
 speedUpBtn.Font = Enum.Font.GothamBold
@@ -137,7 +136,7 @@ speedUpBtn.ZIndex = 101
 local speedDownBtn = Instance.new("TextButton", screenGui)
 speedDownBtn.Name = "SpeedDownBtn"
 speedDownBtn.Size = UDim2.new(0,50,0,50)
-speedDownBtn.Position = UDim2.new(0.78,0,0.65,0)
+speedDownBtn.Position = UDim2.new(0.74,0,0.62,0)
 speedDownBtn.BackgroundColor3 = Color3.fromRGB(25,160,80)
 speedDownBtn.TextColor3 = Color3.new(1,1,1)
 speedDownBtn.Font = Enum.Font.GothamBold
@@ -162,6 +161,7 @@ local originalWalkSpeed
 local currentSpeed
 local speedIncrement = 4
 local maxSpeed = 100
+local speedConnection -- conexión para mantener la velocidad
 
 -- Funciones de vuelo
 local function startFly()
@@ -240,6 +240,15 @@ local function enableSpeed()
             hum.WalkSpeed = currentSpeed
             speedUpBtn.Visible = true
             speedDownBtn.Visible = true
+            -- bucle para mantener la velocidad
+            if speedConnection then speedConnection:Disconnect() end
+            speedConnection = RunService.Heartbeat:Connect(function()
+                local character = localPlayer.Character
+                local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+                if humanoid and speedEnabled and currentSpeed then
+                    humanoid.WalkSpeed = currentSpeed
+                end
+            end)
         end
     end
 end
@@ -255,9 +264,10 @@ local function disableSpeed()
     currentSpeed = nil
     speedUpBtn.Visible = false
     speedDownBtn.Visible = false
+    if speedConnection then speedConnection:Disconnect() speedConnection = nil end
 end
 
--- Mantener el speed al reaparecer
+-- Mantener la velocidad al reaparecer
 localPlayer.CharacterAdded:Connect(function(char)
     char:WaitForChild("Humanoid")
     if speedEnabled then
@@ -273,7 +283,7 @@ localPlayer.CharacterAdded:Connect(function(char)
     end
 end)
 
--- Actualizar ESP cuando nuevos jugadores aparecen
+-- Actualizar ESP en nuevos jugadores
 Players.PlayerAdded:Connect(function(plr)
     plr.CharacterAdded:Connect(function(char)
         if espEnabled then
@@ -298,7 +308,7 @@ Players.PlayerRemoving:Connect(function(plr)
     end
 end)
 
--- Eventos de los botones del menú
+-- Conexiones de botones del menú
 flyToggleBtn.MouseButton1Click:Connect(function()
     flying = not flying
     flyToggleBtn.Text = flying and "Fly ON" or "Fly OFF"
@@ -306,23 +316,16 @@ flyToggleBtn.MouseButton1Click:Connect(function()
     descendBtn.Visible = flying
     if flying then startFly() else ascend=false descend=false stopFly() end
 end)
-
 espToggleBtn.MouseButton1Click:Connect(function()
     if espEnabled then disableESP() espToggleBtn.Text = "ESP OFF"
     else enableESP() espToggleBtn.Text = "ESP ON" end
 end)
-
 speedToggleBtn.MouseButton1Click:Connect(function()
-    if speedEnabled then
-        disableSpeed()
-        speedToggleBtn.Text = "Speed OFF"
-    else
-        enableSpeed()
-        speedToggleBtn.Text = "Speed ON"
-    end
+    if speedEnabled then disableSpeed() speedToggleBtn.Text = "Speed OFF"
+    else enableSpeed() speedToggleBtn.Text = "Speed ON" end
 end)
 
--- Ajustar la velocidad con las flechas
+-- Ajustar la velocidad con flechas
 speedUpBtn.MouseButton1Click:Connect(function()
     if speedEnabled then
         local char = localPlayer.Character
@@ -333,7 +336,6 @@ speedUpBtn.MouseButton1Click:Connect(function()
         end
     end
 end)
-
 speedDownBtn.MouseButton1Click:Connect(function()
     if speedEnabled then
         local char = localPlayer.Character
@@ -362,7 +364,7 @@ closeBtn.MouseButton1Click:Connect(function()
     dragFrame.Visible = true
 end)
 
--- Función para arrastrar paneles
+-- Arrastrar menú y botón
 local dragging, startPosInput, startPosGui
 local function beginDrag(input, gui)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -396,4 +398,4 @@ end
 makeDraggable(dragFrame)
 makeDraggable(menuFrame)
 
-print("✅ Fly, ESP y Speed mejorados cargados")
+print("✅ Fly, ESP y Speed actualizados cargados")
