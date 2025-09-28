@@ -25,31 +25,31 @@ dragFrame.ZIndex = 100
 
 local openBtn = Instance.new("TextButton", dragFrame)
 openBtn.Size = UDim2.new(1, 0, 1, 0)
-openBtn.BackgroundColor3 = Color3.fromRGB(220, 120, 30)
-openBtn.TextColor3 = Color3.new(1, 1, 1)
+openBtn.BackgroundColor3 = Color3.fromRGB(220,120,30)
+openBtn.TextColor3 = Color3.new(1,1,1)
 openBtn.Font = Enum.Font.GothamBold
 openBtn.TextSize = 28
 openBtn.Text = "☰"
 openBtn.BorderSizePixel = 0
 openBtn.ZIndex = 101
-Instance.new("UICorner", openBtn).CornerRadius = UDim.new(0.5, 0)
+Instance.new("UICorner", openBtn).CornerRadius = UDim.new(0.5,0)
 
 -- Menú principal
 local menuFrame = Instance.new("Frame", screenGui)
-menuFrame.Size = UDim2.new(0, 200, 0, 310)
-menuFrame.Position = UDim2.new(0.5, -100, 0.5, -155)
-menuFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+menuFrame.Size = UDim2.new(0,200,0,310)
+menuFrame.Position = UDim2.new(0.5,-100,0.5,-155)
+menuFrame.BackgroundColor3 = Color3.fromRGB(20,20,20)
 menuFrame.Visible = false
 menuFrame.Active = true
 menuFrame.ClipsDescendants = false
 menuFrame.ZIndex = 100
-Instance.new("UICorner", menuFrame).CornerRadius = UDim.new(0, 8)
+Instance.new("UICorner", menuFrame).CornerRadius = UDim.new(0,8)
 
 local titleLabel = Instance.new("TextLabel", menuFrame)
-titleLabel.Size = UDim2.new(1, -40, 0, 24)
-titleLabel.Position = UDim2.new(0, 20, 0, 8)
+titleLabel.Size = UDim2.new(1,-40,0,24)
+titleLabel.Position = UDim2.new(0,20,0,8)
 titleLabel.BackgroundTransparency = 1
-titleLabel.TextColor3 = Color3.new(1, 1, 1)
+titleLabel.TextColor3 = Color3.new(1,1,1)
 titleLabel.Font = Enum.Font.GothamBold
 titleLabel.TextSize = 20
 titleLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -57,25 +57,25 @@ titleLabel.Text = "Menú"
 titleLabel.ZIndex = 101
 
 local closeBtn = Instance.new("TextButton", menuFrame)
-closeBtn.Size = UDim2.new(0, 24, 0, 24)
-closeBtn.Position = UDim2.new(1, -32, 0, 8)
-closeBtn.BackgroundColor3 = Color3.fromRGB(220, 45, 45)
-closeBtn.TextColor3 = Color3.new(1, 1, 1)
+closeBtn.Size = UDim2.new(0,24,0,24)
+closeBtn.Position = UDim2.new(1,-32,0,8)
+closeBtn.BackgroundColor3 = Color3.fromRGB(220,45,45)
+closeBtn.TextColor3 = Color3.new(1,1,1)
 closeBtn.Font = Enum.Font.GothamBold
 closeBtn.TextSize = 18
 closeBtn.Text = "×"
 closeBtn.BorderSizePixel = 0
 closeBtn.ZIndex = 101
-Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0.5, 0)
+Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0.5,0)
 
 -- Helper para crear botones del menú
 local function createToggleButton(name, text, pos, color)
     local btn = Instance.new("TextButton", menuFrame)
     btn.Name = name
-    btn.Size = UDim2.new(0, 140, 0, 40)
+    btn.Size = UDim2.new(0,140,0,40)
     btn.Position = pos
     btn.BackgroundColor3 = color
-    btn.TextColor3 = Color3.new(1, 1, 1)
+    btn.TextColor3 = Color3.new(1,1,1)
     btn.Font = Enum.Font.GothamBold
     btn.TextSize = 18
     btn.Text = text
@@ -84,17 +84,17 @@ local function createToggleButton(name, text, pos, color)
     return btn
 end
 
--- Botones del menú (Fly, ESP, Speed, Lock)
-local flyToggleBtn   = createToggleButton("FlyToggle",   "Fly OFF",   UDim2.new(0.5, -70, 0, 50),  Color3.fromRGB(220, 45, 45))
-local espToggleBtn   = createToggleButton("ESPToggle",   "ESP OFF",   UDim2.new(0.5, -70, 0, 100), Color3.fromRGB(45, 140, 220))
-local speedToggleBtn = createToggleButton("SpeedToggle", "Speed OFF", UDim2.new(0.5, -70, 0, 150), Color3.fromRGB(45, 220, 120))
-local lockToggleBtn  = createToggleButton("LockToggle",  "Lock OFF",  UDim2.new(0.5, -70, 0, 200), Color3.fromRGB(140, 120, 220))
+-- Botones del menú: Fly, ESP, Speed y Lock
+local flyToggleBtn   = createToggleButton("FlyToggle","Fly OFF",   UDim2.new(0.5,-70,0,50),  Color3.fromRGB(220,45,45))
+local espToggleBtn   = createToggleButton("ESPToggle","ESP OFF",   UDim2.new(0.5,-70,0,100), Color3.fromRGB(45,140,220))
+local speedToggleBtn = createToggleButton("SpeedToggle","Speed OFF",UDim2.new(0.5,-70,0,150),Color3.fromRGB(45,220,120))
+local lockToggleBtn  = createToggleButton("LockToggle","Lock OFF",  UDim2.new(0.5,-70,0,200),Color3.fromRGB(140,120,220))
 
--- Botones de vuelo (ascenso/descenso) en el lateral derecho
+-- Botones laterales para vuelo y velocidad
 local ascendBtn = Instance.new("TextButton", screenGui)
-ascendBtn.Size = UDim2.new(0, 50, 0, 50)
-ascendBtn.Position = UDim2.new(0.88, 0, 0.48, 0)
-ascendBtn.BackgroundColor3 = Color3.fromRGB(220, 45, 45)
+ascendBtn.Size = UDim2.new(0,50,0,50)
+ascendBtn.Position = UDim2.new(0.88,0,0.48,0)
+ascendBtn.BackgroundColor3 = Color3.fromRGB(220,45,45)
 ascendBtn.TextColor3 = Color3.new(1,1,1)
 ascendBtn.Font = Enum.Font.GothamBold
 ascendBtn.TextSize = 22
@@ -104,9 +104,9 @@ ascendBtn.Visible = false
 ascendBtn.ZIndex = 101
 
 local descendBtn = Instance.new("TextButton", screenGui)
-descendBtn.Size = UDim2.new(0, 50, 0, 50)
-descendBtn.Position = UDim2.new(0.88, 0, 0.62, 0)
-descendBtn.BackgroundColor3 = Color3.fromRGB(160, 25, 25)
+descendBtn.Size = UDim2.new(0,50,0,50)
+descendBtn.Position = UDim2.new(0.88,0,0.62,0)
+descendBtn.BackgroundColor3 = Color3.fromRGB(160,25,25)
 descendBtn.TextColor3 = Color3.new(1,1,1)
 descendBtn.Font = Enum.Font.GothamBold
 descendBtn.TextSize = 22
@@ -115,11 +115,10 @@ descendBtn.BorderSizePixel = 0
 descendBtn.Visible = false
 descendBtn.ZIndex = 101
 
--- Botones de velocidad en el lateral derecho (más a la izquierda)
 local speedUpBtn = Instance.new("TextButton", screenGui)
-speedUpBtn.Size = UDim2.new(0, 50, 0, 50)
-speedUpBtn.Position = UDim2.new(0.74, 0, 0.48, 0)
-speedUpBtn.BackgroundColor3 = Color3.fromRGB(45, 220, 120)
+speedUpBtn.Size = UDim2.new(0,50,0,50)
+speedUpBtn.Position = UDim2.new(0.74,0,0.48,0)
+speedUpBtn.BackgroundColor3 = Color3.fromRGB(45,220,120)
 speedUpBtn.TextColor3 = Color3.new(1,1,1)
 speedUpBtn.Font = Enum.Font.GothamBold
 speedUpBtn.TextSize = 22
@@ -129,9 +128,9 @@ speedUpBtn.Visible = false
 speedUpBtn.ZIndex = 101
 
 local speedDownBtn = Instance.new("TextButton", screenGui)
-speedDownBtn.Size = UDim2.new(0, 50, 0, 50)
-speedDownBtn.Position = UDim2.new(0.74, 0, 0.62, 0)
-speedDownBtn.BackgroundColor3 = Color3.fromRGB(25, 160, 80)
+speedDownBtn.Size = UDim2.new(0,50,0,50)
+speedDownBtn.Position = UDim2.new(0.74,0,0.62,0)
+speedDownBtn.BackgroundColor3 = Color3.fromRGB(25,160,80)
 speedDownBtn.TextColor3 = Color3.new(1,1,1)
 speedDownBtn.Font = Enum.Font.GothamBold
 speedDownBtn.TextSize = 22
@@ -205,9 +204,9 @@ local function enableESP()
         if char and not currentHighlights[plr] then
             local h = Instance.new("Highlight")
             h.Adornee = char
-            h.FillColor = Color3.new(1, 0, 0)
+            h.FillColor = Color3.new(1,0,0)
             h.FillTransparency = 0.5
-            h.OutlineColor = Color3.new(1, 1, 1)
+            h.OutlineColor = Color3.new(1,1,1)
             h.OutlineTransparency = 0
             h.Parent = char
             currentHighlights[plr] = h
@@ -262,26 +261,33 @@ local function disableSpeed()
     if speedConnection then speedConnection:Disconnect() speedConnection = nil end
 end
 
--- Funciones de Lock-On
+-- Funciones de Lock-On con amplio ángulo de visión
 local function findTarget()
     local cam = workspace.CurrentCamera
     if not cam then return nil end
-    local origin = cam.CFrame.Position
-    local direction = cam.CFrame.LookVector * 1000
-    local params = RaycastParams.new()
-    params.FilterDescendantsInstances = { localPlayer.Character }
-    params.FilterType = Enum.RaycastFilterType.Blacklist
-    local result = workspace:Raycast(origin, direction, params)
-    if result and result.Instance then
-        local model = result.Instance:FindFirstAncestorOfClass("Model")
-        if model then
-            local plr = Players:GetPlayerFromCharacter(model)
-            if plr and plr ~= localPlayer then
-                return model
+    local camPos = cam.CFrame.Position
+    local camDir = cam.CFrame.LookVector
+    local bestTarget = nil
+    local bestDot = 0.9 -- cuanto mayor el dot (producto punto), más alineado con el centro
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= localPlayer then
+            local char = plr.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            if root then
+                local vec = root.Position - camPos
+                local distance = vec.Magnitude
+                if distance < 200 then
+                    local dir = vec / distance
+                    local dot = dir:Dot(camDir)
+                    if dot > bestDot then
+                        bestDot = dot
+                        bestTarget = char
+                    end
+                end
             end
         end
     end
-    return nil
+    return bestTarget
 end
 
 local function startLock()
@@ -334,7 +340,7 @@ task.spawn(function()
     localPlayer.CharacterAdded:Connect(onCharacter)
 end)
 
--- Actualizar ESP en nuevos jugadores
+-- Actualizar ESP para nuevos jugadores
 Players.PlayerAdded:Connect(function(plr)
     plr.CharacterAdded:Connect(function(char)
         if espEnabled then
@@ -342,9 +348,9 @@ Players.PlayerAdded:Connect(function(plr)
             if not currentHighlights[plr] then
                 local h = Instance.new("Highlight")
                 h.Adornee = char
-                h.FillColor = Color3.new(1, 0, 0)
+                h.FillColor = Color3.new(1,0,0)
                 h.FillTransparency = 0.5
-                h.OutlineColor = Color3.new(1, 1, 1)
+                h.OutlineColor = Color3.new(1,1,1)
                 h.OutlineTransparency = 0
                 h.Parent = char
                 currentHighlights[plr] = h
@@ -365,13 +371,7 @@ flyToggleBtn.MouseButton1Click:Connect(function()
     flyToggleBtn.Text = flying and "Fly ON" or "Fly OFF"
     ascendBtn.Visible = flying
     descendBtn.Visible = flying
-    if flying then
-        startFly()
-    else
-        ascend = false
-        descend = false
-        stopFly()
-    end
+    if flying then startFly() else ascend=false descend=false stopFly() end
 end)
 
 espToggleBtn.MouseButton1Click:Connect(function()
@@ -406,7 +406,7 @@ lockToggleBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- Ajustar la velocidad con flechas
+-- Botones para ajustar velocidad
 speedUpBtn.MouseButton1Click:Connect(function()
     if speedEnabled then
         local char = localPlayer.Character
@@ -417,7 +417,6 @@ speedUpBtn.MouseButton1Click:Connect(function()
         end
     end
 end)
-
 speedDownBtn.MouseButton1Click:Connect(function()
     if speedEnabled then
         local char = localPlayer.Character
@@ -430,18 +429,17 @@ speedDownBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- Controles de ascenso y descenso
+-- Controles de ascenso/descenso
 ascendBtn.MouseButton1Down:Connect(function() ascend = true end)
 ascendBtn.MouseButton1Up:Connect(function() ascend = false end)
 descendBtn.MouseButton1Down:Connect(function() descend = true end)
 descendBtn.MouseButton1Up:Connect(function() descend = false end)
 
--- Mostrar u ocultar el menú
+-- Mostrar/ocultar menú
 openBtn.MouseButton1Click:Connect(function()
     dragFrame.Visible = false
     menuFrame.Visible = true
 end)
-
 closeBtn.MouseButton1Click:Connect(function()
     menuFrame.Visible = false
     dragFrame.Visible = true
@@ -461,33 +459,26 @@ local function beginDrag(input, gui)
         end)
     end
 end
-
 local function updateDrag(input, gui)
     if draggingFlag and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
         local delta = input.Position - startPosInput
         local newPos = UDim2.new(startPosGui.X.Scale, startPosGui.X.Offset + delta.X,
                                  startPosGui.Y.Scale, startPosGui.Y.Offset + delta.Y)
         local cam = workspace.CurrentCamera
-        local viewport = cam and cam.ViewportSize or Vector2.new(800, 600)
+        local viewport = cam and cam.ViewportSize or Vector2.new(800,600)
         local guiSize = gui.AbsoluteSize
         local maxX = viewport.X - guiSize.X
         local maxY = viewport.Y - guiSize.Y
-        local clampedX = math.clamp(newPos.X.Offset, 0, maxX)
-        local clampedY = math.clamp(newPos.Y.Offset, 0, maxY)
-        gui.Position = UDim2.new(0, clampedX, 0, clampedY)
+        local clampedX = math.clamp(newPos.X.Offset,0,maxX)
+        local clampedY = math.clamp(newPos.Y.Offset,0,maxY)
+        gui.Position = UDim2.new(0,clampedX,0,clampedY)
     end
 end
-
 local function makeDraggable(gui)
-    gui.InputBegan:Connect(function(input)
-        beginDrag(input, gui)
-    end)
-    gui.InputChanged:Connect(function(input)
-        updateDrag(input, gui)
-    end)
+    gui.InputBegan:Connect(function(input) beginDrag(input, gui) end)
+    gui.InputChanged:Connect(function(input) updateDrag(input, gui) end)
 end
-
 makeDraggable(dragFrame)
 makeDraggable(menuFrame)
 
-print("✅ Fly, ESP, Speed y Lock cargados")
+print("✅ Fly, ESP, Speed y Lock actualizados cargados")
