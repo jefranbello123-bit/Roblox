@@ -1,6 +1,8 @@
--- 📱 SCRIPT DE VUELO CORREGIDO PARA MÓVIL (Joystick alineado a cámara)
+-- 📱 SCRIPT DE VUELO PARA MÓVIL (CORREGIDO)
+-- ✅ Soporta joystick, botones de subir/bajar y sigue la cámara correctamente
 
 local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
 local RS = game:GetService("RunService")
 
 local plr = Players.LocalPlayer
@@ -26,7 +28,6 @@ local frame = Instance.new("Frame")
 frame.Size = UDim2.new(0, 220, 0, 150)
 frame.Position = UDim2.new(0, 10, 0, 100)
 frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-frame.BackgroundTransparency = 0
 frame.BorderSizePixel = 2
 frame.BorderColor3 = Color3.new(1, 1, 1)
 frame.Parent = gui
@@ -117,14 +118,14 @@ local function flyUpdate()
 
     local moveVector = Vector3.new(0, 0, 0)
 
-    -- Movimiento con joystick (alineado a cámara)
+    -- ✅ Movimiento relativo a la cámara
     if humanoid and humanoid.MoveDirection.Magnitude > 0 then
         local camCF = cam.CFrame
-        local camForward = Vector3.new(camCF.LookVector.X, 0, camCF.LookVector.Z).Unit
-        local camRight = Vector3.new(camCF.RightVector.X, 0, camCF.RightVector.Z).Unit
+        local forward = Vector3.new(camCF.LookVector.X, 0, camCF.LookVector.Z).Unit
+        local right = Vector3.new(camCF.RightVector.X, 0, camCF.RightVector.Z).Unit
 
-        local md = humanoid.MoveDirection
-        moveVector = (camForward * md.Z + camRight * md.X)
+        local inputDir = humanoid.MoveDirection
+        moveVector = (forward * inputDir.Z + right * inputDir.X).Unit
     end
 
     -- Movimiento vertical
@@ -140,20 +141,21 @@ local function flyUpdate()
     -- Aplicar velocidad
     bv.Velocity = finalVector * flySpeed
 
-    -- Orientación según cámara
-    local lookDirection = (cam.CFrame.LookVector * Vector3.new(1, 0, 1))
-    if lookDirection.Magnitude > 0 then
-        bg.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + lookDirection.Unit)
+    -- Mantener orientación
+    if moveVector.Magnitude > 0.1 then
+        local lookDirection = (cam.CFrame.LookVector * Vector3.new(1, 0, 1)).Unit
+        if lookDirection.Magnitude > 0 then
+            bg.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + lookDirection)
+        end
+    else
+        bg.CFrame = hrp.CFrame
     end
 end
 
 -- Alternar vuelo
 local function toggleFly()
     local chr = plr.Character
-    if not chr or not chr:FindFirstChild("HumanoidRootPart") then
-        print("No hay personaje")
-        return
-    end
+    if not chr or not chr:FindFirstChild("HumanoidRootPart") then return end
 
     local hrp = chr.HumanoidRootPart
     local humanoid = chr:FindFirstChild("Humanoid")
@@ -161,7 +163,6 @@ local function toggleFly()
     flyEnabled = not flyEnabled
 
     if flyEnabled then
-        -- Activar vuelo
         flyBtn.Text = "FLY: ON"
         flyBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
         upBtn.Visible = true
@@ -182,14 +183,8 @@ local function toggleFly()
         bg.CFrame = hrp.CFrame
         bg.Parent = hrp
 
-        if humanoid then
-            humanoid:ChangeState(Enum.HumanoidStateType.Physics)
-        end
-
-        print("✅ Vuelo ACTIVADO")
-
+        if humanoid then humanoid.PlatformStand = true end
     else
-        -- Desactivar vuelo
         flyBtn.Text = "FLY: OFF"
         flyBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
         upBtn.Visible = false
@@ -198,18 +193,14 @@ local function toggleFly()
         if bv then bv:Destroy() bv = nil end
         if bg then bg:Destroy() bg = nil end
 
-        if humanoid then
-            humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
-        end
+        if humanoid then humanoid.PlatformStand = false end
 
         isUpPressed = false
         isDownPressed = false
-
-        print("❌ Vuelo DESACTIVADO")
     end
 end
 
--- Eventos
+-- Eventos de botones
 flyBtn.MouseButton1Click:Connect(toggleFly)
 
 speedUpBtn.MouseButton1Click:Connect(function()
@@ -222,46 +213,36 @@ speedDownBtn.MouseButton1Click:Connect(function()
     speedLabel.Text = "Velocidad: " .. flySpeed
 end)
 
+-- Subir/Bajar
 upBtn.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
         isUpPressed = true
-        print("SUBIR activado")
     end
 end)
-
 upBtn.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
         isUpPressed = false
-        print("SUBIR desactivado")
     end
 end)
 
 downBtn.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
         isDownPressed = true
-        print("BAJAR activado")
     end
 end)
-
 downBtn.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
         isDownPressed = false
-        print("BAJAR desactivado")
     end
 end)
 
--- Loop principal
+-- Loop
 connection = RS.Heartbeat:Connect(flyUpdate)
 
--- Reset si cambia el personaje
+-- Reset en respawn
 plr.CharacterAdded:Connect(function()
-    wait(1)
-    if flyEnabled then
-        toggleFly()
-    end
+    task.wait(1)
+    if flyEnabled then toggleFly() end
 end)
 
 print("🚀 SCRIPT DE VUELO MÓVIL CARGADO")
-print("📱 Toca FLY: OFF para activar")
-print("🕹️ Usa el joystick para moverte")
-print("⬆️⬇️ Usa los botones SUBIR/BAJAR")
