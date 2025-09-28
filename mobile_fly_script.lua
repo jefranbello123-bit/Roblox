@@ -1,956 +1,682 @@
 --[[
-    Panel ESP + WalkHack + Fly + GodMode + Teletransportar + Highlight + Noclip
-
-    - ESP: Silueta (Highlight) + etiqueta grande con TextStroke, distancia y visible a través de paredes.
-    - PLAYER: WalkHack, Fly (botones ↑/↓), GodMode y Noclip.
-    - TELETRANSPORTAR: TP al jugador seleccionado.
-    - SETTINGS: Ajuste del tamaño del nombre del ESP.
-
-    ⚠️ Aviso: El uso de scripts así puede violar los Términos de Servicio de Roblox. Úsalo bajo tu responsabilidad.
+    Admin Panel Mobile (Rojo/Negro) — 100% móvil
+    - Bottom sheet (panel desde abajo), botones grandes y scroll.
+    - Secciones: Main (ESP, God, Noclip, Fly, WalkSpeed), Teleport, Visuals, Info.
+    - ESP: Highlight rojo + Billboard (AlwaysOnTop) con nombre grande y distancia.
+    - Fly: botones ↑/↓ visibles solo cuando está ON.
+    - Aviso: puede violar TOS de Roblox. Úsalo bajo tu responsabilidad.
 ]]
 
+-------------------- Services --------------------
 local Players          = game:GetService("Players")
 local RunService       = game:GetService("RunService")
-local CoreGui          = game:GetService("CoreGui")
+local TweenService     = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
+local CoreGui          = game:GetService("CoreGui")
 local Workspace        = game:GetService("Workspace")
 
-local player = Players.LocalPlayer
+local LP = Players.LocalPlayer
 
--- =======================
--- Estados generales
--- =======================
-local espEnabled        = false
-local walkhackEnabled   = false
-local flyEnabled        = false
-local godModeEnabled    = false
-local noclipEnabled     = false
+-------------------- Tema (Rojo/Negro) --------------------
+local Theme = {
+    bg        = Color3.fromRGB(10,10,14),   -- fondo oscuro
+    sheet     = Color3.fromRGB(20,20,26),   -- panel
+    card      = Color3.fromRGB(30,30,38),
+    text      = Color3.fromRGB(245,245,245),
+    subtext   = Color3.fromRGB(200,200,210),
+    accent    = Color3.fromRGB(220,45,45),  -- rojo fuerte
+    accentDim = Color3.fromRGB(160,25,25),
+    railOff   = Color3.fromRGB(70,70,80),
+    stroke    = Color3.fromRGB(70,70,90)
+}
 
-local currentSpeed      = 100
-local espNameSize       = 20 -- tamaño inicial del nombre en ESP
+-------------------- Estado --------------------
+local S = {
+    esp        = false,
+    god        = false,
+    noclip     = false,
+    fly        = false,
+    walkspeed  = false,
+    speed      = 100,
+    espSize    = 22
+}
 
--- Fly
-local flyBodyGyro, flyBodyVelocity, flyUpdateConnection
-local flyAscend, flyDescend = false, false
+-------------------- Helpers UI --------------------
+local function round(inst, r) local c=Instance.new("UICorner") c.CornerRadius=UDim.new(0,r or 12) c.Parent=inst end
+local function stroke(inst, th) local s=Instance.new("UIStroke") s.Thickness=th or 1 s.Color=Theme.stroke s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border s.Parent=inst end
+local function pad(inst,l,t,r,b) local p=Instance.new("UIPadding") p.PaddingLeft=UDim.new(0,l or 0) p.PaddingTop=UDim.new(0,t or 0) p.PaddingRight=UDim.new(0,r or 0) p.PaddingBottom=UDim.new(0,b or 0) p.Parent=inst end
 
--- GodMode
-local godModeConnection = nil
-local originalMaxHealth = nil
+-- Switch móvil (grande)
+local function makeSwitch(parent, defaultOn, onChanged)
+    local switch = Instance.new("Frame")
+    switch.Size = UDim2.new(0, 72, 0, 32)
+    switch.BackgroundColor3 = defaultOn and Theme.accent or Theme.railOff
+    switch.BorderSizePixel = 0
+    round(switch, 16); stroke(switch,1)
 
--- Noclip
-local noclipConn = nil
-local originalCanCollide = {} -- [BasePart] = bool
+    local knob = Instance.new("Frame", switch)
+    knob.Size = UDim2.new(0, 26, 0, 26)
+    knob.Position = defaultOn and UDim2.new(1, -29, 0, 3) or UDim2.new(0, 3, 0, 3)
+    knob.BackgroundColor3 = Theme.sheet
+    knob.BorderSizePixel = 0
+    round(knob, 13); stroke(knob,1)
 
--- ESP
-local espFolders           = {}  -- [player] = Folder
-local espUpdateConnections = {}  -- [player] = RBXScriptConnection
-local playerAddedConnection, playerRemovingConnection
+    local btn = Instance.new("TextButton", switch)
+    btn.BackgroundTransparency = 1
+    btn.Size = UDim2.new(1,0,1,0)
+    btn.Text = ""
 
--- =======================
--- GUI principal
--- =======================
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "ESPWalkhackMenu"
-screenGui.ResetOnSpawn = false
-screenGui.Parent = CoreGui
-
--- Botón principal (☰)
-local mainButton = Instance.new("TextButton")
-mainButton.Size     = UDim2.new(0,70,0,70)
-mainButton.Position = UDim2.new(0.5,-35,0.1,0)
-mainButton.Text     = "☰"
-mainButton.TextSize = 32
-mainButton.Font     = Enum.Font.GothamBold
-mainButton.TextColor3       = Color3.new(1,1,1)
-mainButton.BackgroundColor3 = Color3.fromRGB(40,40,60)
-mainButton.BorderSizePixel  = 0
-mainButton.ZIndex           = 2
-mainButton.Parent           = screenGui
-do
-    local corner = Instance.new("UICorner", mainButton)
-    corner.CornerRadius = UDim.new(1,0)
-    local stroke = Instance.new("UIStroke", mainButton)
-    stroke.Thickness = 2
-    stroke.Color     = Color3.fromRGB(80,80,120)
-    local grad = Instance.new("UIGradient", mainButton)
-    grad.Color = ColorSequence.new{
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(70,70,120)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(40,40,80))
-    }
-    grad.Rotation = 90
-end
-
--- Marco del menú
-local menuFrame = Instance.new("Frame")
-menuFrame.Size            = UDim2.new(0,320,0,420)
-menuFrame.Position        = UDim2.new(0.5,-160,0.1,0)
-menuFrame.BackgroundColor3= Color3.fromRGB(30,30,50)
-menuFrame.BorderSizePixel = 0
-menuFrame.Visible         = false
-menuFrame.Parent          = screenGui
-do
-    local corner = Instance.new("UICorner", menuFrame)
-    corner.CornerRadius = UDim.new(0,15)
-    local grad = Instance.new("UIGradient", menuFrame)
-    grad.Color = ColorSequence.new{
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(50,50,90)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(20,20,40))
-    }
-    grad.Rotation = 90
-end
-
--- Título
-local titleLabel = Instance.new("TextLabel", menuFrame)
-titleLabel.Size     = UDim2.new(1,0,0,35)
-titleLabel.Position = UDim2.new(0,0,0,0)
-titleLabel.Text     = "Administrador de Juego"
-titleLabel.TextSize = 18
-titleLabel.Font     = Enum.Font.GothamBlack
-titleLabel.TextColor3 = Color3.new(1,1,1)
-titleLabel.BackgroundColor3 = Color3.fromRGB(20,20,35)
-titleLabel.BorderSizePixel = 0
-do
-    local stroke = Instance.new("UIStroke", titleLabel)
-    stroke.Thickness = 1
-    stroke.Color = Color3.fromRGB(80,80,120)
-end
-
--- Botón cerrar (X)
-local closeButton = Instance.new("TextButton", menuFrame)
-closeButton.Size     = UDim2.new(0,25,0,25)
-closeButton.Position = UDim2.new(1,-30,0,5)
-closeButton.Text     = "×"
-closeButton.TextSize = 18
-closeButton.Font     = Enum.Font.GothamBold
-closeButton.TextColor3       = Color3.new(1,1,1)
-closeButton.BackgroundColor3 = Color3.fromRGB(180,60,80)
-closeButton.BorderSizePixel  = 0
-do
-    local corner = Instance.new("UICorner", closeButton)
-    corner.CornerRadius = UDim.new(0,4)
-    local stroke = Instance.new("UIStroke", closeButton)
-    stroke.Thickness = 2
-    stroke.Color     = Color3.fromRGB(80,80,120)
-end
-
--- Barra lateral (navegación)
-local navFrame = Instance.new("Frame", menuFrame)
-navFrame.Size     = UDim2.new(0,100,1,-35)
-navFrame.Position = UDim2.new(0,0,0,35)
-navFrame.BackgroundColor3 = Color3.fromRGB(25,25,45)
-navFrame.BorderSizePixel  = 0
-
--- Zona de contenido
-local contentFrame = Instance.new("Frame", menuFrame)
-contentFrame.Size     = UDim2.new(1,-100,1,-35)
-contentFrame.Position = UDim2.new(0,100,0,35)
-contentFrame.BackgroundTransparency = 1
-contentFrame.BorderSizePixel = 0
-
--- Botones de navegación
-local function makeNavButton(text, index)
-    local btn = Instance.new("TextButton", navFrame)
-    btn.Name     = text.."Nav"
-    btn.Size     = UDim2.new(1,0,0,45)
-    btn.Position = UDim2.new(0,0,0,(index-1)*50)
-    btn.Text     = text
-    btn.TextSize = 14
-    btn.Font     = Enum.Font.GothamBold
-    btn.TextColor3       = Color3.fromRGB(210,210,230)
-    btn.BackgroundColor3 = Color3.fromRGB(35,35,55)
-    btn.BorderSizePixel  = 0
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0,6)
-    local stroke = Instance.new("UIStroke", btn)
-    stroke.Thickness = 1
-    stroke.Color     = Color3.fromRGB(60,60,100)
-    return btn
-end
-
-local navIndex = 1
-local navButtons = {}
-local function addSection(name)
-    local button = makeNavButton(name, navIndex)
-    navButtons[name] = button
-    navIndex += 1
-    return button
-end
-
-local navEsp      = addSection("ESP")
-local navPlayer   = addSection("PLAYER")
-local navTP       = addSection("TELETRANSPORTAR")
-local navSettings = addSection("SETTINGS")
-
--- =======================
--- Secciones
--- =======================
-local espContent = Instance.new("Frame", contentFrame)
-espContent.Size     = UDim2.new(1,0,1,0)
-espContent.BackgroundTransparency = 1
-
-local playerContent = Instance.new("Frame", contentFrame)
-playerContent.Size     = UDim2.new(1,0,1,0)
-playerContent.BackgroundTransparency = 1
-
-local tpContent = Instance.new("Frame", contentFrame)
-tpContent.Size     = UDim2.new(1,0,1,0)
-tpContent.BackgroundTransparency = 1
-
-local settingsContent = Instance.new("Frame", contentFrame)
-settingsContent.Size     = UDim2.new(1,0,1,0)
-settingsContent.BackgroundTransparency = 1
-
--- =======================
--- ESP (toggle)
--- =======================
-local espToggle = Instance.new("TextButton", espContent)
-espToggle.Size     = UDim2.new(0.8,0,0,40)
-espToggle.Position = UDim2.new(0.1,0,0.1,0)
-espToggle.Text     = "ESP: OFF"
-espToggle.TextSize = 14
-espToggle.Font     = Enum.Font.GothamBold
-espToggle.TextColor3       = Color3.new(1,1,1)
-espToggle.BackgroundColor3 = Color3.fromRGB(180,60,80)
-espToggle.BorderSizePixel  = 0
-do
-    local corner = Instance.new("UICorner", espToggle)
-    corner.CornerRadius = UDim.new(0,10)
-    local stroke = Instance.new("UIStroke", espToggle)
-    stroke.Thickness = 2
-    stroke.Color     = Color3.fromRGB(70,70,110)
-end
-
--- =======================
--- PLAYER (WalkHack, Fly, GodMode, Noclip)
--- =======================
-local walkToggle = Instance.new("TextButton", playerContent)
-walkToggle.Size     = UDim2.new(0.8,0,0,40)
-walkToggle.Position = UDim2.new(0.1,0,0.1,0)
-walkToggle.Text     = "WALKHACK: OFF"
-walkToggle.TextSize = 14
-walkToggle.Font     = Enum.Font.GothamBold
-walkToggle.TextColor3       = Color3.new(1,1,1)
-walkToggle.BackgroundColor3 = Color3.fromRGB(180,60,80)
-walkToggle.BorderSizePixel  = 0
-do
-    local corner = Instance.new("UICorner", walkToggle)
-    corner.CornerRadius = UDim.new(0,10)
-    local stroke = Instance.new("UIStroke", walkToggle)
-    stroke.Thickness = 2
-    stroke.Color     = Color3.fromRGB(70,70,110)
-end
-
-local flyToggle = Instance.new("TextButton", playerContent)
-flyToggle.Size     = UDim2.new(0.8,0,0,40)
-flyToggle.Position = UDim2.new(0.1,0,0.25,0)
-flyToggle.Text     = "FLY: OFF"
-flyToggle.TextSize = 14
-flyToggle.Font     = Enum.Font.GothamBold
-flyToggle.TextColor3       = Color3.new(1,1,1)
-flyToggle.BackgroundColor3 = Color3.fromRGB(180,60,80)
-flyToggle.BorderSizePixel  = 0
-do
-    local corner = Instance.new("UICorner", flyToggle)
-    corner.CornerRadius = UDim.new(0,10)
-    local stroke = Instance.new("UIStroke", flyToggle)
-    stroke.Thickness = 2
-    stroke.Color     = Color3.fromRGB(70,70,110)
-end
-
-local godToggle = Instance.new("TextButton", playerContent)
-godToggle.Size     = UDim2.new(0.8,0,0,40)
-godToggle.Position = UDim2.new(0.1,0,0.40,0)
-godToggle.Text     = "GODMODE: OFF"
-godToggle.TextSize = 14
-godToggle.Font     = Enum.Font.GothamBold
-godToggle.TextColor3       = Color3.new(1,1,1)
-godToggle.BackgroundColor3 = Color3.fromRGB(180,60,80)
-godToggle.BorderSizePixel  = 0
-do
-    local corner = Instance.new("UICorner", godToggle)
-    corner.CornerRadius = UDim.new(0,10)
-    local stroke = Instance.new("UIStroke", godToggle)
-    stroke.Thickness = 2
-    stroke.Color     = Color3.fromRGB(70,70,110)
-end
-
--- Noclip toggle
-local noclipToggle = Instance.new("TextButton", playerContent)
-noclipToggle.Size     = UDim2.new(0.8,0,0,40)
-noclipToggle.Position = UDim2.new(0.1,0,0.55,0)
-noclipToggle.Text     = "NOCLIP: OFF"
-noclipToggle.TextSize = 14
-noclipToggle.Font     = Enum.Font.GothamBold
-noclipToggle.TextColor3       = Color3.new(1,1,1)
-noclipToggle.BackgroundColor3 = Color3.fromRGB(180,60,80)
-noclipToggle.BorderSizePixel  = 0
-do
-    local corner = Instance.new("UICorner", noclipToggle)
-    corner.CornerRadius = UDim.new(0,10)
-    local stroke = Instance.new("UIStroke", noclipToggle)
-    stroke.Thickness = 2
-    stroke.Color     = Color3.fromRGB(70,70,110)
-end
-
--- Velocidad y controles (bajados para no chocar con Noclip)
-local speedLabel = Instance.new("TextLabel", playerContent)
-speedLabel.Size     = UDim2.new(0.8,0,0,25)
-speedLabel.Position = UDim2.new(0.1,0,0.68,0)
-speedLabel.Text     = "VELOCIDAD: "..currentSpeed
-speedLabel.TextSize = 12
-speedLabel.Font     = Enum.Font.Gotham
-speedLabel.TextColor3       = Color3.new(1,1,1)
-speedLabel.BackgroundColor3 = Color3.fromRGB(70,70,100)
-speedLabel.BorderSizePixel  = 0
-do
-    local corner = Instance.new("UICorner", speedLabel)
-    corner.CornerRadius = UDim.new(0,10)
-end
-
-local speedUp = Instance.new("TextButton", playerContent)
-speedUp.Size     = UDim2.new(0.35,0,0,25)
-speedUp.Position = UDim2.new(0.1,0,0.78,0)
-speedUp.Text     = "+50"
-speedUp.TextSize = 12
-speedUp.Font     = Enum.Font.GothamBold
-speedUp.TextColor3       = Color3.new(1,1,1)
-speedUp.BackgroundColor3 = Color3.fromRGB(60,170,90)
-speedUp.BorderSizePixel  = 0
-do
-    local corner = Instance.new("UICorner", speedUp)
-    corner.CornerRadius = UDim.new(0,10)
-    local stroke = Instance.new("UIStroke", speedUp)
-    stroke.Thickness = 2
-    stroke.Color     = Color3.fromRGB(70,70,110)
-end
-
-local speedDown = Instance.new("TextButton", playerContent)
-speedDown.Size     = UDim2.new(0.35,0,0,25)
-speedDown.Position = UDim2.new(0.55,0,0.78,0)
-speedDown.Text     = "-50"
-speedDown.TextSize = 12
-speedDown.Font     = Enum.Font.GothamBold
-speedDown.TextColor3       = Color3.new(1,1,1)
-speedDown.BackgroundColor3 = Color3.fromRGB(170,60,70)
-speedDown.BorderSizePixel  = 0
-do
-    local corner = Instance.new("UICorner", speedDown)
-    corner.CornerRadius = UDim.new(0,10)
-    local stroke = Instance.new("UIStroke", speedDown)
-    stroke.Thickness = 2
-    stroke.Color     = Color3.fromRGB(70,70,110)
-end
-
--- =======================
--- TELETRANSPORTAR
--- =======================
-local selectedTpTarget = nil
-
-local tpListFrame = Instance.new("ScrollingFrame", tpContent)
-tpListFrame.Size     = UDim2.new(0.8,0,0.6,0)
-tpListFrame.Position = UDim2.new(0.1,0,0.1,0)
-tpListFrame.ScrollBarThickness = 6
-tpListFrame.CanvasSize = UDim2.new(0,0,0,0)
-tpListFrame.BackgroundColor3 = Color3.fromRGB(40,40,70)
-tpListFrame.BorderSizePixel  = 0
-tpListFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
-do
-    local corner = Instance.new("UICorner", tpListFrame)
-    corner.CornerRadius = UDim.new(0,8)
-end
-local listLayout = Instance.new("UIListLayout", tpListFrame)
-listLayout.Padding = UDim.new(0,4)
-listLayout.SortOrder = Enum.SortOrder.LayoutOrder
-
-local tpRefreshButton = Instance.new("TextButton", tpContent)
-tpRefreshButton.Size     = UDim2.new(0.35,0,0,30)
-tpRefreshButton.Position = UDim2.new(0.1,0,0.75,0)
-tpRefreshButton.Text     = "Actualizar"
-tpRefreshButton.TextSize = 12
-tpRefreshButton.Font     = Enum.Font.GothamBold
-tpRefreshButton.TextColor3       = Color3.new(1,1,1)
-tpRefreshButton.BackgroundColor3 = Color3.fromRGB(60,170,90)
-tpRefreshButton.BorderSizePixel  = 0
-do
-    local corner = Instance.new("UICorner", tpRefreshButton)
-    corner.CornerRadius = UDim.new(0,8)
-    local stroke = Instance.new("UIStroke", tpRefreshButton)
-    stroke.Thickness = 2
-    stroke.Color     = Color3.fromRGB(70,70,110)
-end
-
-local tpActionButton = Instance.new("TextButton", tpContent)
-tpActionButton.Size     = UDim2.new(0.35,0,0,30)
-tpActionButton.Position = UDim2.new(0.55,0,0.75,0)
-tpActionButton.Text     = "TP"
-tpActionButton.TextSize = 12
-tpActionButton.Font     = Enum.Font.GothamBold
-tpActionButton.TextColor3       = Color3.new(1,1,1)
-tpActionButton.BackgroundColor3 = Color3.fromRGB(170,60,70)
-tpActionButton.BorderSizePixel  = 0
-do
-    local corner = Instance.new("UICorner", tpActionButton)
-    corner.CornerRadius = UDim.new(0,8)
-    local stroke = Instance.new("UIStroke", tpActionButton)
-    stroke.Thickness = 2
-    stroke.Color     = Color3.fromRGB(70,70,110)
-end
-
-local function populatePlayerList()
-    selectedTpTarget = nil
-    for _, child in ipairs(tpListFrame:GetChildren()) do
-        if child:IsA("TextButton") then child:Destroy() end
-    end
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= player then
-            local item = Instance.new("TextButton", tpListFrame)
-            item.Size     = UDim2.new(1,0,0,30)
-            item.Text     = p.Name
-            item.TextSize = 12
-            item.Font     = Enum.Font.Gotham
-            item.TextColor3       = Color3.new(1,1,1)
-            item.BackgroundColor3 = Color3.fromRGB(50,50,80)
-            item.BorderSizePixel  = 0
-            do
-                local corner = Instance.new("UICorner", item)
-                corner.CornerRadius = UDim.new(0,6)
-            end
-            item.MouseButton1Click:Connect(function()
-                for _, btn in ipairs(tpListFrame:GetChildren()) do
-                    if btn:IsA("TextButton") then
-                        btn.BackgroundColor3 = Color3.fromRGB(50,50,80)
-                    end
-                end
-                item.BackgroundColor3 = Color3.fromRGB(60,80,160)
-                selectedTpTarget = p
-            end)
-        end
-    end
-end
-
-tpRefreshButton.MouseButton1Click:Connect(populatePlayerList)
-
-tpActionButton.MouseButton1Click:Connect(function()
-    if selectedTpTarget then
-        local targetChar = selectedTpTarget.Character
-        local myChar     = player.Character
-        if targetChar and myChar then
-            local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
-            local myRoot     = myChar:FindFirstChild("HumanoidRootPart")
-            if targetRoot and myRoot then
-                myRoot.CFrame = targetRoot.CFrame * CFrame.new(0, 3, 0)
-            end
-        end
-    end
-end)
-
--- =======================
--- SETTINGS (tamaño de nombre de ESP)
--- =======================
-local espSizeLabel = Instance.new("TextLabel", settingsContent)
-espSizeLabel.Size     = UDim2.new(0.8,0,0,25)
-espSizeLabel.Position = UDim2.new(0.1,0,0.1,0)
-espSizeLabel.Text     = "Tamaño de nombre ESP: "..espNameSize
-espSizeLabel.TextSize = 12
-espSizeLabel.Font     = Enum.Font.Gotham
-espSizeLabel.TextColor3       = Color3.new(1,1,1)
-espSizeLabel.BackgroundColor3 = Color3.fromRGB(70,70,100)
-espSizeLabel.BorderSizePixel  = 0
-do
-    local corner = Instance.new("UICorner", espSizeLabel)
-    corner.CornerRadius = UDim.new(0,10)
-end
-
-local espSizeUp = Instance.new("TextButton", settingsContent)
-espSizeUp.Size     = UDim2.new(0.35,0,0,25)
-espSizeUp.Position = UDim2.new(0.1,0,0.22,0)
-espSizeUp.Text     = "+2"
-espSizeUp.TextSize = 12
-espSizeUp.Font     = Enum.Font.GothamBold
-espSizeUp.TextColor3       = Color3.new(1,1,1)
-espSizeUp.BackgroundColor3 = Color3.fromRGB(60,170,90)
-espSizeUp.BorderSizePixel  = 0
-do
-    local corner = Instance.new("UICorner", espSizeUp)
-    corner.CornerRadius = UDim.new(0,10)
-    local stroke = Instance.new("UIStroke", espSizeUp)
-    stroke.Thickness = 2
-    stroke.Color     = Color3.fromRGB(70,70,110)
-end
-
-local espSizeDown = Instance.new("TextButton", settingsContent)
-espSizeDown.Size     = UDim2.new(0.35,0,0,25)
-espSizeDown.Position = UDim2.new(0.55,0,0.22,0)
-espSizeDown.Text     = "-2"
-espSizeDown.TextSize = 12
-espSizeDown.Font     = Enum.Font.GothamBold
-espSizeDown.TextColor3       = Color3.new(1,1,1)
-espSizeDown.BackgroundColor3 = Color3.fromRGB(170,60,70)
-espSizeDown.BorderSizePixel  = 0
-do
-    local corner = Instance.new("UICorner", espSizeDown)
-    corner.CornerRadius = UDim.new(0,10)
-    local stroke = Instance.new("UIStroke", espSizeDown)
-    stroke.Thickness = 2
-    stroke.Color     = Color3.fromRGB(70,70,110)
-end
-
--- =======================
--- Botones de vuelo (fuera del menú)
--- =======================
-local ascendButton = Instance.new("TextButton", screenGui)
-ascendButton.Size     = UDim2.new(0,40,0,40)
-ascendButton.Position = UDim2.new(0.80,0,0.70,0)
-ascendButton.Text     = "↑"
-ascendButton.TextSize = 20
-ascendButton.Font     = Enum.Font.GothamBold
-ascendButton.TextColor3       = Color3.new(1,1,1)
-ascendButton.BackgroundColor3 = Color3.fromRGB(60,170,90)
-ascendButton.BorderSizePixel  = 0
-ascendButton.Visible  = false
-do
-    local corner = Instance.new("UICorner", ascendButton)
-    corner.CornerRadius = UDim.new(0,8)
-    local stroke = Instance.new("UIStroke", ascendButton)
-    stroke.Thickness = 2
-    stroke.Color     = Color3.fromRGB(70,70,110)
-end
-
-local descendButton = Instance.new("TextButton", screenGui)
-descendButton.Size     = UDim2.new(0,40,0,40)
-descendButton.Position = UDim2.new(0.88,0,0.70,0)
-descendButton.Text     = "↓"
-descendButton.TextSize = 20
-descendButton.Font     = Enum.Font.GothamBold
-descendButton.TextColor3       = Color3.new(1,1,1)
-descendButton.BackgroundColor3 = Color3.fromRGB(170,60,70)
-descendButton.BorderSizePixel  = 0
-descendButton.Visible  = false
-do
-    local corner = Instance.new("UICorner", descendButton)
-    corner.CornerRadius = UDim.new(0,8)
-    local stroke = Instance.new("UIStroke", descendButton)
-    stroke.Thickness = 2
-    stroke.Color     = Color3.fromRGB(70,70,110)
-end
-
--- =======================
--- Navegación
--- =======================
-local currentSection = "ESP"
-local function updateNav()
-    for name, btn in pairs(navButtons) do
-        if name == currentSection then
-            btn.BackgroundColor3 = Color3.fromRGB(60,80,160)
-            btn.TextColor3       = Color3.new(1,1,1)
+    local val = defaultOn
+    local function set(on, animate)
+        val = on
+        local g1 = {Position = on and UDim2.new(1, -29, 0, 3) or UDim2.new(0, 3, 0, 3)}
+        local g2 = {BackgroundColor3 = on and Theme.accent or Theme.railOff}
+        if animate then
+            TweenService:Create(knob, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), g1):Play()
+            TweenService:Create(switch, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), g2):Play()
         else
-            btn.BackgroundColor3 = Color3.fromRGB(35,35,55)
-            btn.TextColor3       = Color3.fromRGB(210,210,230)
+            knob.Position = g1.Position
+            switch.BackgroundColor3 = g2.BackgroundColor3
         end
+        if onChanged then onChanged(val) end
     end
-    espContent.Visible      = (currentSection == "ESP")
-    playerContent.Visible   = (currentSection == "PLAYER")
-    tpContent.Visible       = (currentSection == "TELETRANSPORTAR")
-    settingsContent.Visible = (currentSection == "SETTINGS")
-end
-local function showSection(name) currentSection = name; updateNav() end
-
-navEsp.MouseButton1Click:Connect(function() showSection("ESP") end)
-navPlayer.MouseButton1Click:Connect(function() showSection("PLAYER") end)
-navTP.MouseButton1Click:Connect(function() showSection("TELETRANSPORTAR"); populatePlayerList() end)
-navSettings.MouseButton1Click:Connect(function() showSection("SETTINGS") end)
-updateNav()
-
--- =======================
--- WalkHack
--- =======================
-local walkUpdateConnection
-local function applyWalkspeed()
-    local char = player.Character
-    if char then
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        if hum then
-            hum.WalkSpeed = walkhackEnabled and currentSpeed or 16
-        end
-    end
-end
-local function toggleWalkhack()
-    walkhackEnabled = not walkhackEnabled
-    walkToggle.Text = walkhackEnabled and "WALKHACK: ON" or "WALKHACK: OFF"
-    walkToggle.BackgroundColor3 = walkhackEnabled and Color3.fromRGB(60,170,90) or Color3.fromRGB(170,60,70)
-    if walkhackEnabled then
-        applyWalkspeed()
-        if not walkUpdateConnection then
-            walkUpdateConnection = RunService.RenderStepped:Connect(function()
-                local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
-                if hum then hum.WalkSpeed = currentSpeed end
-            end)
-        end
-    else
-        if walkUpdateConnection then walkUpdateConnection:Disconnect() walkUpdateConnection=nil end
-        applyWalkspeed()
-    end
+    btn.MouseButton1Click:Connect(function() set(not val, true) end)
+    return switch, set
 end
 
--- =======================
+-- Slider móvil (0..max)
+local function makeSlider(parent, maxValue, step, defaultValue, onChanged)
+    local holder = Instance.new("Frame")
+    holder.Size = UDim2.new(1, -10, 0, 44)
+    holder.BackgroundTransparency = 1
+
+    local bar = Instance.new("Frame", holder)
+    bar.AnchorPoint = Vector2.new(0, 0.5)
+    bar.Position = UDim2.new(0, 0, 0.5, 0)
+    bar.Size = UDim2.new(1, -72, 0, 8)
+    bar.BackgroundColor3 = Theme.railOff
+    bar.BorderSizePixel = 0
+    round(bar, 4)
+
+    local fill = Instance.new("Frame", bar)
+    fill.Size = UDim2.new(math.clamp(defaultValue/maxValue,0,1), 0, 1, 0)
+    fill.BackgroundColor3 = Theme.accent
+    fill.BorderSizePixel = 0
+    round(fill, 4)
+
+    local knob = Instance.new("Frame", bar)
+    knob.AnchorPoint = Vector2.new(0.5, 0.5)
+    knob.Position = UDim2.new(math.clamp(defaultValue/maxValue,0,1), 0, 0.5, 0)
+    knob.Size = UDim2.new(0, 18, 0, 18)
+    knob.BackgroundColor3 = Theme.sheet
+    knob.BorderSizePixel = 0
+    round(knob, 9); stroke(knob,1)
+
+    local valueLabel = Instance.new("TextLabel", holder)
+    valueLabel.Size = UDim2.new(0, 64, 1, 0)
+    valueLabel.AnchorPoint = Vector2.new(1, 0)
+    valueLabel.Position = UDim2.new(1, 0, 0, 0)
+    valueLabel.BackgroundTransparency = 1
+    valueLabel.Font = Enum.Font.GothamBold
+    valueLabel.TextSize = 16
+    valueLabel.TextColor3 = Theme.text
+    valueLabel.Text = tostring(defaultValue)
+
+    local dragging = false
+    local function setFromX(x)
+        local rel = math.clamp((x - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
+        local raw = rel * maxValue
+        local stepped = math.floor((raw / step) + 0.5) * step
+        stepped = math.clamp(stepped, 0, maxValue)
+        fill.Size = UDim2.new(stepped/maxValue,0,1,0)
+        knob.Position = UDim2.new(stepped/maxValue, 0, 0.5, 0)
+        valueLabel.Text = tostring(stepped)
+        if onChanged then onChanged(stepped) end
+    end
+
+    bar.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.Touch or i.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true; setFromX(i.Position.X)
+        end
+    end)
+    bar.InputEnded:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.Touch or i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+    end)
+    UserInputService.InputChanged:Connect(function(i)
+        if dragging and (i.UserInputType == Enum.UserInputType.Touch or i.UserInputType == Enum.UserInputType.MouseMovement) then
+            setFromX(i.Position.X)
+        end
+    end)
+
+    return holder
+end
+
+-- Card móvil
+local function makeCard(parent, title, subtitle)
+    local card = Instance.new("Frame")
+    card.Size = UDim2.new(1, -24, 0, subtitle and 92 or 74)
+    card.BackgroundColor3 = Theme.card
+    card.BorderSizePixel = 0
+    round(card, 14); stroke(card,1)
+    card.Parent = parent
+
+    local t = Instance.new("TextLabel", card)
+    t.BackgroundTransparency = 1
+    t.Position = UDim2.new(0, 16, 0, 10)
+    t.Size = UDim2.new(1, -32, 0, 22)
+    t.Text = title
+    t.Font = Enum.Font.GothamBold
+    t.TextSize = 18
+    t.TextColor3 = Theme.text
+    t.TextXAlignment = Enum.TextXAlignment.Left
+
+    if subtitle then
+        local s = Instance.new("TextLabel", card)
+        s.BackgroundTransparency = 1
+        s.Position = UDim2.new(0, 16, 0, 36)
+        s.Size = UDim2.new(1, -32, 0, 20)
+        s.Text = subtitle
+        s.Font = Enum.Font.Gotham
+        s.TextSize = 14
+        s.TextColor3 = Theme.subtext
+        s.TextXAlignment = Enum.TextXAlignment.Left
+    end
+
+    return card
+end
+
+-------------------- Gui roots --------------------
+local Root = Instance.new("ScreenGui")
+Root.Name = "AdminPanel_Mobile_RedBlack"
+Root.ResetOnSpawn = false
+Root.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+Root.Parent = CoreGui
+
+-- Capa para ESP en PlayerGui (evita glitches y respeta AlwaysOnTop)
+local ESPGui = Instance.new("ScreenGui")
+ESPGui.Name = "ESP_Layer"
+ESPGui.ResetOnSpawn = false
+ESPGui.IgnoreGuiInset = true
+ESPGui.Parent = LP:WaitForChild("PlayerGui")
+
+-------------------- Botón flotante (abre/cierra) --------------------
+local openBtn = Instance.new("TextButton")
+openBtn.Name = "OpenMenu"
+openBtn.Size = UDim2.new(0, 64, 0, 64)
+-- En móvil, para no chocar con joystick (izquierda), lo ponemos a la derecha
+openBtn.Position = UDim2.new(0.86, 0, 0.70, 0)
+openBtn.Text = "Menu"
+openBtn.TextSize = 16
+openBtn.Font = Enum.Font.GothamBlack
+openBtn.TextColor3 = Theme.text
+openBtn.BackgroundColor3 = Theme.accent
+openBtn.BorderSizePixel = 0
+round(openBtn, 32); stroke(openBtn,1)
+openBtn.Parent = Root
+
+-------------------- Bottom Sheet (panel) --------------------
+local sheet = Instance.new("Frame", Root)
+sheet.Visible = false
+sheet.Size = UDim2.new(1, 0, 0.60, 0)  -- 60% de alto
+sheet.Position = UDim2.new(0, 0, 1, 0) -- oculto abajo
+sheet.BackgroundColor3 = Theme.sheet
+sheet.BorderSizePixel = 0
+round(sheet, 18); stroke(sheet,1)
+
+-- sombreado detrás
+local dim = Instance.new("Frame", Root)
+dim.BackgroundColor3 = Color3.new(0,0,0)
+dim.BackgroundTransparency = 1
+dim.Size = UDim2.new(1,0,1,0)
+dim.Visible = false
+
+-- Topbar
+local topbar = Instance.new("Frame", sheet)
+topbar.Size = UDim2.new(1, 0, 0, 50)
+topbar.BackgroundColor3 = Theme.bg
+topbar.BorderSizePixel = 0
+round(topbar, 18); stroke(topbar,1)
+
+local title = Instance.new("TextLabel", topbar)
+title.BackgroundTransparency = 1
+title.Position = UDim2.new(0, 16, 0, 0)
+title.Size = UDim2.new(1, -92, 1, 0)
+title.Text = "Admin Panel"
+title.Font = Enum.Font.GothamBlack
+title.TextSize = 18
+title.TextColor3 = Theme.text
+title.TextXAlignment = Enum.TextXAlignment.Left
+
+local closeBtn = Instance.new("TextButton", topbar)
+closeBtn.AnchorPoint = Vector2.new(1,0.5)
+closeBtn.Position = UDim2.new(1, -8, 0.5, 0)
+closeBtn.Size = UDim2.new(0, 40, 0, 34)
+closeBtn.BackgroundColor3 = Theme.accentDim
+closeBtn.Text = "×"
+closeBtn.TextColor3 = Theme.text
+closeBtn.BorderSizePixel = 0
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextSize = 20
+round(closeBtn, 10)
+
+-- Nav horizontal
+local nav = Instance.new("ScrollingFrame", sheet)
+nav.Position = UDim2.new(0, 0, 0, 50)
+nav.Size = UDim2.new(1, 0, 0, 48)
+nav.CanvasSize = UDim2.new(0,0,0,0)
+nav.AutomaticCanvasSize = Enum.AutomaticSize.X
+nav.ScrollBarThickness = 4
+nav.BackgroundColor3 = Theme.bg
+nav.BorderSizePixel = 0
+
+local navList = Instance.new("UIListLayout", nav)
+navList.FillDirection = Enum.FillDirection.Horizontal
+navList.Padding = UDim.new(0, 8)
+navList.HorizontalAlignment = Enum.HorizontalAlignment.Left
+
+local function makeNavBtn(text)
+    local b = Instance.new("TextButton")
+    b.Size = UDim2.new(0, 120, 0, 36)
+    b.Text = text
+    b.Font = Enum.Font.GothamBold
+    b.TextSize = 14
+    b.TextColor3 = Theme.text
+    b.BackgroundColor3 = Theme.card
+    b.BorderSizePixel = 0
+    round(b, 10); stroke(b,1)
+    b.Parent = nav
+    return b
+end
+
+-- Content
+local content = Instance.new("ScrollingFrame", sheet)
+content.Position = UDim2.new(0, 0, 0, 98)
+content.Size = UDim2.new(1, 0, 1, -98)
+content.CanvasSize = UDim2.new(0,0,0,0)
+content.AutomaticCanvasSize = Enum.AutomaticSize.Y
+content.ScrollBarThickness = 6
+content.BackgroundColor3 = Theme.sheet
+content.BorderSizePixel = 0
+
+local contentList = Instance.new("UIListLayout", content)
+contentList.Padding = UDim.new(0, 12)
+contentList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+-------------------- Secciones --------------------
+local Sections = {}
+local Current = nil
+
+local function showSection(name)
+    for k,frame in pairs(Sections) do
+        frame.Visible = (k == name)
+    end
+    Current = name
+end
+
+local function makeSection(name)
+    local frame = Instance.new("Frame", content)
+    frame.Size = UDim2.new(1, -8, 0, 0)
+    frame.BackgroundTransparency = 1
+    frame.AutomaticSize = Enum.AutomaticSize.Y
+    Sections[name] = frame
+    return frame
+end
+
+local navOrder = {"Main","Teleport","Visuals","Info"}
+local navButtons = {}
+for _,n in ipairs(navOrder) do
+    navButtons[n] = makeNavBtn(n)
+end
+
+for k,btn in pairs(navButtons) do
+    btn.MouseButton1Click:Connect(function() showSection(k) end)
+end
+
+-------------------- Features (hooks) --------------------
+-- WalkSpeed
+local function applyWalk()
+    local char = LP.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if hum then hum.WalkSpeed = S.walkspeed and S.speed or 16 end
+end
+
 -- Fly
--- =======================
-local function startFlying()
-    local char = player.Character
-    local root = char and char:FindFirstChild("HumanoidRootPart")
-    if not root then return end
-    flyBodyGyro = Instance.new("BodyGyro", root)
-    flyBodyGyro.P = 9e4
-    flyBodyGyro.maxTorque = Vector3.new(9e9,9e9,9e9)
-    flyBodyGyro.CFrame = Workspace.CurrentCamera.CFrame
-    flyBodyVelocity = Instance.new("BodyVelocity", root)
-    flyBodyVelocity.velocity = Vector3.new(0,0,0)
-    flyBodyVelocity.maxForce = Vector3.new(9e9,9e9,9e9)
-    flyBodyVelocity.P = 9e4
-    flyUpdateConnection = RunService.RenderStepped:Connect(function()
-        if not flyEnabled then return end
-        local dir = Vector3.new(0,0,0)
-        local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+local flyGyro, flyVel, flyConn
+local function startFly()
+    local char = LP.Character; if not char then return end
+    local root = char:FindFirstChild("HumanoidRootPart"); if not root then return end
+    flyGyro = Instance.new("BodyGyro", root)
+    flyGyro.P = 9e4; flyGyro.MaxTorque = Vector3.new(9e9,9e9,9e9)
+    flyVel = Instance.new("BodyVelocity", root)
+    flyVel.MaxForce = Vector3.new(9e9,9e9,9e9); flyVel.P = 9e4
+    flyConn = RunService.RenderStepped:Connect(function()
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        local dir = Vector3.new()
         if hum then
-            local moveDir = hum.MoveDirection
-            if moveDir.Magnitude > 0 then dir = dir + moveDir end
+            local mv = hum.MoveDirection
+            if mv.Magnitude>0 then dir += mv end
         end
-        if flyAscend  then dir = dir + Vector3.new(0,1,0) end
-        if flyDescend then dir = dir + Vector3.new(0,-1,0) end
-        if dir.Magnitude > 0 then dir = dir.Unit end
-        flyBodyVelocity.velocity = dir * 50
-        flyBodyGyro.CFrame = Workspace.CurrentCamera.CFrame
+        if _G.__Ascend then dir += Vector3.new(0,1,0) end
+        if _G.__Descend then dir += Vector3.new(0,-1,0) end
+        if dir.Magnitude>0 then dir=dir.Unit end
+        flyVel.Velocity = dir * 50
+        flyGyro.CFrame = Workspace.CurrentCamera.CFrame
     end)
 end
-local function stopFlying()
-    if flyUpdateConnection then flyUpdateConnection:Disconnect() flyUpdateConnection=nil end
-    if flyBodyGyro     then flyBodyGyro:Destroy() flyBodyGyro=nil end
-    if flyBodyVelocity then flyBodyVelocity:Destroy() flyBodyVelocity=nil end
-end
-local function toggleFly()
-    flyEnabled = not flyEnabled
-    flyToggle.Text = flyEnabled and "FLY: ON" or "FLY: OFF"
-    flyToggle.BackgroundColor3 = flyEnabled and Color3.fromRGB(60,170,90) or Color3.fromRGB(170,60,70)
-    ascendButton.Visible  = flyEnabled
-    descendButton.Visible = flyEnabled
-    if flyEnabled then startFlying() else stopFlying() end
+local function stopFly()
+    if flyConn then flyConn:Disconnect() flyConn=nil end
+    if flyGyro then flyGyro:Destroy() flyGyro=nil end
+    if flyVel  then flyVel:Destroy()  flyVel=nil end
 end
 
--- =======================
 -- GodMode
--- =======================
-local function applyGodMode()
-    local char = player.Character
-    if not char then return end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-    if not originalMaxHealth then originalMaxHealth = hum.MaxHealth end
-    hum.MaxHealth = math.huge
-    hum.Health    = hum.MaxHealth
-    if godModeConnection then godModeConnection:Disconnect() end
-    godModeConnection = hum.HealthChanged:Connect(function()
+local godConn, originalMaxHealth
+local function applyGod()
+    local char = LP.Character; if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid"); if not hum then return end
+    originalMaxHealth = originalMaxHealth or hum.MaxHealth
+    hum.MaxHealth = math.huge; hum.Health = hum.MaxHealth
+    if godConn then godConn:Disconnect() end
+    godConn = hum.HealthChanged:Connect(function()
         if hum.Health < hum.MaxHealth then hum.Health = hum.MaxHealth end
     end)
 end
-local function removeGodMode()
-    local char = player.Character
-    if not char then return end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-    if godModeConnection then godModeConnection:Disconnect() godModeConnection=nil end
+local function removeGod()
+    local char = LP.Character; if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid"); if not hum then return end
+    if godConn then godConn:Disconnect() godConn=nil end
     if originalMaxHealth then hum.MaxHealth = originalMaxHealth end
     hum.Health = hum.MaxHealth
 end
-local function toggleGodMode()
-    godModeEnabled = not godModeEnabled
-    godToggle.Text = godModeEnabled and "GODMODE: ON" or "GODMODE: OFF"
-    godToggle.BackgroundColor3 = godModeEnabled and Color3.fromRGB(60,170,90) or Color3.fromRGB(170,60,70)
-    if godModeEnabled then applyGodMode() else removeGodMode() end
-end
 
--- =======================
 -- Noclip
--- =======================
-local function setCharacterCollision(char, collide)
-    for _, obj in ipairs(char:GetDescendants()) do
+local noclipConn, savedCollide = nil, {}
+local function setCharCollision(char, collide)
+    for _,obj in ipairs(char:GetDescendants()) do
         if obj:IsA("BasePart") then
-            if originalCanCollide[obj] == nil then
-                originalCanCollide[obj] = obj.CanCollide
-            end
+            if savedCollide[obj]==nil then savedCollide[obj]=obj.CanCollide end
             obj.CanCollide = collide
         end
     end
 end
 local function enableNoclip()
-    local char = player.Character
-    if not char then return end
-    originalCanCollide = {}
-    setCharacterCollision(char, false)
+    local char = LP.Character; if not char then return end
+    savedCollide = {}; setCharCollision(char, false)
     noclipConn = RunService.Stepped:Connect(function()
-        local c = player.Character
-        if not c then return end
-        for _, obj in ipairs(c:GetDescendants()) do
-            if obj:IsA("BasePart") then
-                obj.CanCollide = false
-            end
-        end
-        local root = c:FindFirstChild("HumanoidRootPart")
-        if root then
-            -- mini anti-atasco
-            root.Velocity = root.Velocity + Vector3.new(0, 0.01, 0)
+        local c = LP.Character; if not c then return end
+        for _,obj in ipairs(c:GetDescendants()) do
+            if obj:IsA("BasePart") then obj.CanCollide=false end
         end
     end)
 end
 local function disableNoclip()
-    if noclipConn then noclipConn:Disconnect() noclipConn = nil end
-    local char = player.Character
-    if not char then return end
-    for part, prev in pairs(originalCanCollide) do
-        if part and part.Parent then
-            part.CanCollide = prev
-        end
-    end
-    originalCanCollide = {}
-end
-local function toggleNoclip()
-    noclipEnabled = not noclipEnabled
-    noclipToggle.Text = noclipEnabled and "NOCLIP: ON" or "NOCLIP: OFF"
-    noclipToggle.BackgroundColor3 = noclipEnabled and Color3.fromRGB(60,170,90) or Color3.fromRGB(170,60,70)
-    if noclipEnabled then enableNoclip() else disableNoclip() end
+    if noclipConn then noclipConn:Disconnect() noclipConn=nil end
+    for part,prev in pairs(savedCollide) do if part and part.Parent then part.CanCollide=prev end end
+    savedCollide = {}
 end
 
--- =======================
--- ESP (silueta + nombres grandes)
--- =======================
-local function removeESP(target)
-    if espFolders[target] then espFolders[target]:Destroy() espFolders[target] = nil end
-    if espUpdateConnections[target] then espUpdateConnections[target]:Disconnect() espUpdateConnections[target]=nil end
+-- ESP (Highlight + Billboard AlwaysOnTop)
+local ESPFolders, ESPConns = {}, {}
+local pAddConn, pRemConn
+local function clearESP(plr)
+    if ESPConns[plr] then ESPConns[plr]:Disconnect() ESPConns[plr]=nil end
+    if ESPFolders[plr] then ESPFolders[plr]:Destroy() ESPFolders[plr]=nil end
 end
+local function createESP(plr)
+    if not S.esp or plr==LP or ESPFolders[plr] then return end
+    local folder = Instance.new("Folder", ESPGui)
+    folder.Name = "ESP_"..plr.Name
+    ESPFolders[plr] = folder
 
-local function createESP(target)
-    if not espEnabled or target == player or espFolders[target] then return end
-
-    local folder = Instance.new("Folder", screenGui)
-    folder.Name = target.Name.."_ESP"
-    espFolders[target] = folder
-
-    local function update()
-        if not espEnabled then return end
-        local char = target.Character
-        if not char or not char.Parent then
-            for _,c in ipairs(folder:GetChildren()) do c:Destroy() end
-            return
-        end
+    ESPConns[plr] = RunService.Heartbeat:Connect(function()
+        if not S.esp then return end
+        local char = plr.Character
+        if not char or not char.Parent then for _,c in ipairs(folder:GetChildren()) do c:Destroy() end return end
         local root = char:FindFirstChild("HumanoidRootPart")
         local hum  = char:FindFirstChildOfClass("Humanoid")
-        if not root or not hum or hum.Health <= 0 then
-            for _,c in ipairs(folder:GetChildren()) do c:Destroy() end
-            return
-        end
+        if not root or not hum or hum.Health<=0 then for _,c in ipairs(folder:GetChildren()) do c:Destroy() end return end
 
-        -- Ocultar nombre por defecto
         pcall(function() hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None end)
 
-        -- Limpiar y reconstruir adornos
         for _,c in ipairs(folder:GetChildren()) do c:Destroy() end
 
-        -- Silueta (Highlight)
-        local highlight = Instance.new("Highlight", folder)
-        highlight.Adornee = char
-        highlight.FillColor = Color3.new(1,0,0)
-        highlight.FillTransparency = 0.7
-        highlight.OutlineColor = Color3.new(1,0,0)
-        highlight.OutlineTransparency = 0
+        local hl = Instance.new("Highlight", folder)
+        hl.Adornee = char
+        hl.FillColor = Color3.fromRGB(255,0,0)
+        hl.FillTransparency = 0.85
+        hl.OutlineColor = Color3.fromRGB(255,0,0)
+        hl.OutlineTransparency = 0
 
-        -- Etiqueta grande + borde + distancia
-        local billboard = Instance.new("BillboardGui", folder)
-        billboard.Adornee     = root
-        billboard.Size        = UDim2.new(0, 220, 0, 50)
-        billboard.StudsOffset = Vector3.new(0, 4, 0)
-        billboard.AlwaysOnTop = true
-        billboard.MaxDistance = 2000
+        local bb = Instance.new("BillboardGui", folder)
+        bb.Adornee = root
+        bb.Size = UDim2.new(0, 260, 0, 54)
+        bb.AlwaysOnTop = true
+        bb.MaxDistance = 2000
+        bb.StudsOffset = Vector3.new(0,4,0)
 
-        local label = Instance.new("TextLabel", billboard)
-        label.Size                   = UDim2.new(1, 0, 1, 0)
-        label.BackgroundTransparency = 1
-        label.Text                   = target.Name.." ["..math.floor(hum.Health).." HP]"
-        label.TextColor3             = Color3.new(1, 1, 1)
-        label.TextSize               = espNameSize
-        label.Font                   = Enum.Font.GothamBlack
-        label.TextStrokeTransparency = 0
-        label.TextStrokeColor3       = Color3.fromRGB(10, 10, 10)
+        local lbl = Instance.new("TextLabel", bb)
+        lbl.Size = UDim2.new(1,0,1,0)
+        lbl.BackgroundTransparency = 1
+        lbl.Font = Enum.Font.GothamBlack
+        lbl.TextColor3 = Theme.text
+        lbl.TextStrokeTransparency = 0
+        lbl.TextStrokeColor3 = Color3.fromRGB(10,10,10)
+        lbl.TextSize = S.espSize
+        lbl.Text = ("%s [%d HP]"):format(plr.Name, math.floor(hum.Health))
 
-        local sub = Instance.new("TextLabel", billboard)
-        sub.AnchorPoint             = Vector2.new(0.5, 0)
-        sub.Position                = UDim2.new(0.5, 0, 1, -14)
-        sub.Size                    = UDim2.new(1, 0, 0, 18)
-        sub.BackgroundTransparency  = 1
-        sub.TextColor3              = Color3.fromRGB(255, 255, 170)
-        sub.TextSize                = math.clamp(espNameSize - 6, 10, 36)
-        sub.Font                    = Enum.Font.GothamBold
-        sub.TextXAlignment          = Enum.TextXAlignment.Center
-
-        -- Línea hacia el objetivo (opcional)
-        local line = Instance.new("LineHandleAdornment", folder)
-        line.Adornee      = Workspace.Terrain
-        line.ZIndex       = 0
-        line.Thickness    = 2
-        line.Color3       = Color3.new(1,1,0)
-        line.Transparency = 0.5
-
-        local localChar  = player.Character
-        local localRoot  = localChar and localChar:FindFirstChild("HumanoidRootPart")
-        if localRoot then
-            line.Length = (root.Position - localRoot.Position).Magnitude
-            line.CFrame = CFrame.new(localRoot.Position, root.Position)
-            local dist  = math.floor((root.Position - localRoot.Position).Magnitude)
-            sub.Text    = dist.." studs"
-        end
-    end
-
-    espUpdateConnections[target] = RunService.RenderStepped:Connect(update)
+        local distL = Instance.new("TextLabel", bb)
+        distL.AnchorPoint = Vector2.new(0.5,0)
+        distL.Position = UDim2.new(0.5,0,1,-16)
+        distL.Size = UDim2.new(1,0,0,16)
+        distL.BackgroundTransparency = 1
+        distL.Font = Enum.Font.GothamBold
+        distL.TextSize = math.clamp(S.espSize-6, 10, 30)
+        distL.TextColor3 = Color3.fromRGB(255,230,150)
+        local myC = LP.Character; local myR = myC and myC:FindFirstChild("HumanoidRootPart")
+        if myR then distL.Text = tostring(math.floor((root.Position - myR.Position).Magnitude)).." studs" end
+    end)
 end
-
-local function toggleESP()
-    espEnabled = not espEnabled
-    espToggle.Text = espEnabled and "ESP: ON" or "ESP: OFF"
-    espToggle.BackgroundColor3 = espEnabled and Color3.fromRGB(60,170,90) or Color3.fromRGB(170,60,70)
-    if espEnabled then
+local function toggleESP(on)
+    S.esp = on
+    if on then
         for _,p in ipairs(Players:GetPlayers()) do createESP(p) end
-        if not playerAddedConnection then
-            playerAddedConnection = Players.PlayerAdded:Connect(function(p) task.delay(1,function() createESP(p) end) end)
-        end
-        if not playerRemovingConnection then
-            playerRemovingConnection = Players.PlayerRemoving:Connect(function(p) removeESP(p) end)
-        end
+        if not pAddConn then pAddConn = Players.PlayerAdded:Connect(function(p) task.delay(1, function() createESP(p) end) end) end
+        if not pRemConn then pRemConn = Players.PlayerRemoving:Connect(function(p) clearESP(p) end) end
     else
-        for ply,_ in pairs(espFolders) do removeESP(ply) end
-        if playerAddedConnection then playerAddedConnection:Disconnect() playerAddedConnection=nil end
-        if playerRemovingConnection then playerRemovingConnection:Disconnect() playerRemovingConnection=nil end
+        for p,_ in pairs(ESPFolders) do clearESP(p) end
+        if pAddConn then pAddConn:Disconnect() pAddConn=nil end
+        if pRemConn then pRemConn:Disconnect() pRemConn=nil end
     end
 end
 
--- =======================
--- Conexiones de botones
--- =======================
-espToggle.MouseButton1Click:Connect(toggleESP)
-walkToggle.MouseButton1Click:Connect(toggleWalkhack)
-flyToggle.MouseButton1Click:Connect(toggleFly)
-godToggle.MouseButton1Click:Connect(toggleGodMode)
-noclipToggle.MouseButton1Click:Connect(toggleNoclip)
+-------------------- Sección: Main --------------------
+local secMain = makeSection("Main")
+do
+    local c1 = makeCard(secMain, "ESP", "Highlight + nombre visible a través de paredes")
+    c1.Position = UDim2.new(0,12,0,0)
+    local sw,_set = makeSwitch(c1, false, function(v) toggleESP(v) end)
+    sw.AnchorPoint = Vector2.new(1,0.5); sw.Position = UDim2.new(1, -14, 0.5, 0); sw.Parent = c1
 
-speedUp.MouseButton1Click:Connect(function()
-    currentSpeed = currentSpeed + 50
-    speedLabel.Text = "VELOCIDAD: "..currentSpeed
-    applyWalkspeed()
-end)
-speedDown.MouseButton1Click:Connect(function()
-    currentSpeed = math.max(50, currentSpeed - 50)
-    speedLabel.Text = "VELOCIDAD: "..currentSpeed
-    applyWalkspeed()
-end)
+    local c2 = makeCard(secMain, "GodMode", "Mantiene la salud al máximo")
+    local sw2,_ = makeSwitch(c2, false, function(v) S.god=v; if v then applyGod() else removeGod() end end)
+    sw2.AnchorPoint = Vector2.new(1,0.5); sw2.Position = UDim2.new(1, -14, 0.5, 0); sw2.Parent = c2
 
-ascendButton.MouseButton1Down:Connect(function() flyAscend = true end)
-ascendButton.MouseButton1Up:Connect(function()   flyAscend = false end)
-descendButton.MouseButton1Down:Connect(function() flyDescend = true end)
-descendButton.MouseButton1Up:Connect(function()   flyDescend = false end)
+    local c3 = makeCard(secMain, "Noclip", "Atraviesa paredes/estructuras")
+    local sw3,_ = makeSwitch(c3, false, function(v) S.noclip=v; if v then enableNoclip() else disableNoclip() end end)
+    sw3.AnchorPoint = Vector2.new(1,0.5); sw3.Position = UDim2.new(1, -14, 0.5, 0); sw3.Parent = c3
 
--- =======================
--- Mostrar / ocultar menú
--- =======================
-local menuOpen = false
-local function openMenu()
-    menuOpen           = true
-    mainButton.Visible = false
-    menuFrame.Visible  = true
-end
-local function closeMenuFrame()
-    menuOpen           = false
-    menuFrame.Visible  = false
-    mainButton.Visible = true
-end
-mainButton.MouseButton1Click:Connect(openMenu)
-closeButton.MouseButton1Click:Connect(closeMenuFrame)
+    local c4 = makeCard(secMain, "Fly", "W/A/S/D + botones ↑/↓ en pantalla")
+    local sw4,_ = makeSwitch(c4, false, function(v) S.fly=v; if v then startFly() else stopFly() end _G.__Ascend=false; _G.__Descend=false; ascendBtn.Visible=v; descendBtn.Visible=v end)
+    sw4.AnchorPoint = Vector2.new(1,0.5); sw4.Position = UDim2.new(1, -14, 0.5, 0); sw4.Parent = c4
 
--- =======================
--- Ajuste tamaño ESP (SETTINGS)
--- =======================
-local function updateESPNameSize()
-    espSizeLabel.Text = "Tamaño de nombre ESP: "..espNameSize
-end
-espSizeUp.MouseButton1Click:Connect(function()
-    espNameSize = math.min(50, espNameSize + 2)
-    updateESPNameSize()
-end)
-espSizeDown.MouseButton1Click:Connect(function()
-    espNameSize = math.max(8, espNameSize - 2)
-    updateESPNameSize()
-end)
+    local c5 = makeCard(secMain, "WalkSpeed", "Velocidad del personaje")
+    local sw5,_ = makeSwitch(c5, false, function(v) S.walkspeed=v; applyWalk() end)
+    sw5.AnchorPoint = Vector2.new(1,0.5); sw5.Position = UDim2.new(1, -14, 0.5, 0); sw5.Parent = c5
 
--- =======================
--- TP: carga inicial al entrar en sección
--- =======================
-local function _ensureTPLoaded()
-    if currentSection == "TELETRANSPORTAR" then
-        populatePlayerList()
-    end
+    local slider = makeSlider(c5, 400, 10, S.speed, function(v) S.speed=v; applyWalk() end)
+    slider.Position = UDim2.new(0,16,0,40)
+    slider.Parent = c5
 end
 
--- =======================
--- Reaplicar al respawn
--- =======================
-player.CharacterAdded:Connect(function()
-    task.wait(1)
-    applyWalkspeed()
-    if godModeEnabled then applyGodMode() end
-    if noclipEnabled then enableNoclip() end
-end)
+-------------------- Sección: Teleport --------------------
+local secTP = makeSection("Teleport")
+do
+    local listCard = makeCard(secTP, "Jugadores", "Toca un nombre y pulsa TP")
+    listCard.Size = UDim2.new(1, -24, 0, 240)
 
--- =======================
--- Arrastre del menú sin mover cámara
--- =======================
-local dragging, dragStart, startButtonPos, startMenuPos, dragInputRef = false, nil, nil, nil, nil
-local function beginDrag(input)
-    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging       = true
-        dragStart      = input.Position
-        startButtonPos = mainButton.Position
-        startMenuPos   = menuFrame.Position
-        dragInputRef   = input
-        UserInputService.ModalEnabled = true
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                dragging = false
-                UserInputService.ModalEnabled = false
+    local list = Instance.new("ScrollingFrame", listCard)
+    list.Position = UDim2.new(0, 16, 0, 42)
+    list.Size = UDim2.new(1, -32, 1, -92)
+    list.BackgroundColor3 = Theme.bg; list.BorderSizePixel = 0
+    round(list, 10); stroke(list,1)
+    list.CanvasSize = UDim2.new(0,0,0,0)
+    list.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    list.ScrollBarThickness = 4
+
+    local ll = Instance.new("UIListLayout", list)
+    ll.Padding = UDim.new(0, 6)
+
+    local selected
+    local function refresh()
+        for _,c in ipairs(list:GetChildren()) do if c:IsA("TextButton") then c:Destroy() end end
+        for _,p in ipairs(Players:GetPlayers()) do
+            if p ~= LP then
+                local b = Instance.new("TextButton", list)
+                b.Size = UDim2.new(1, -8, 0, 34)
+                b.Text = p.Name
+                b.Font = Enum.Font.Gotham
+                b.TextSize = 16
+                b.TextColor3 = Theme.text
+                b.BackgroundColor3 = Theme.card
+                b.BorderSizePixel = 0
+                round(b, 8); stroke(b,1)
+                b.MouseButton1Click:Connect(function()
+                    selected = p
+                    for _,o in ipairs(list:GetChildren()) do if o:IsA("TextButton") then o.BackgroundColor3=Theme.card end end
+                    b.BackgroundColor3 = Theme.accentDim
+                end)
             end
-        end)
+        end
     end
+
+    local row = Instance.new("Frame", listCard)
+    row.BackgroundTransparency = 1
+    row.Size = UDim2.new(1, -32, 0, 40)
+    row.Position = UDim2.new(0, 16, 1, -46)
+
+    local refreshBtn = Instance.new("TextButton", row)
+    refreshBtn.Size = UDim2.new(0.48, 0, 1, 0)
+    refreshBtn.Text = "Actualizar"
+    refreshBtn.Font = Enum.Font.GothamBold
+    refreshBtn.TextSize = 16
+    refreshBtn.TextColor3 = Theme.text
+    refreshBtn.BackgroundColor3 = Theme.accent
+    refreshBtn.BorderSizePixel = 0
+    round(refreshBtn, 10)
+
+    local tpBtn = Instance.new("TextButton", row)
+    tpBtn.AnchorPoint = Vector2.new(1,0)
+    tpBtn.Position = UDim2.new(1, 0, 0, 0)
+    tpBtn.Size = UDim2.new(0.48, 0, 1, 0)
+    tpBtn.Text = "TP"
+    tpBtn.Font = Enum.Font.GothamBold
+    tpBtn.TextSize = 16
+    tpBtn.TextColor3 = Theme.text
+    tpBtn.BackgroundColor3 = Theme.accentDim
+    tpBtn.BorderSizePixel = 0
+    round(tpBtn, 10)
+
+    refreshBtn.MouseButton1Click:Connect(refresh)
+    tpBtn.MouseButton1Click:Connect(function()
+        if not selected then return end
+        local me = LP.Character; local tar = selected.Character
+        if me and tar then
+            local myR = me:FindFirstChild("HumanoidRootPart")
+            local tR  = tar:FindFirstChild("HumanoidRootPart")
+            if myR and tR then myR.CFrame = tR.CFrame * CFrame.new(0,3,0) end
+        end
+    end)
+    refresh()
 end
-local function updateDragInput(input)
-    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement then
-        dragInputRef = input
-    end
+
+-------------------- Sección: Visuals --------------------
+local secVis = makeSection("Visuals")
+do
+    local c = makeCard(secVis, "Tamaño del nombre del ESP", "Ajusta la fuente (10–50)")
+    local slider = makeSlider(c, 50, 2, S.espSize, function(v) S.espSize = v end)
+    slider.Position = UDim2.new(0,16,0,40)
+    slider.Parent = c
 end
-UserInputService.InputChanged:Connect(function(input)
-    if input == dragInputRef and dragging then
-        local delta = input.Position - dragStart
-        mainButton.Position = UDim2.new(startButtonPos.X.Scale, startButtonPos.X.Offset + delta.X,
-                                        startButtonPos.Y.Scale, startButtonPos.Y.Offset + delta.Y)
-        menuFrame.Position = UDim2.new(startMenuPos.X.Scale, startMenuPos.X.Offset + delta.X,
-                                       startMenuPos.Y.Scale, startMenuPos.Y.Offset + delta.Y)
-    end
+
+-------------------- Sección: Info --------------------
+local secInfo = makeSection("Info")
+do
+    local c = makeCard(secInfo, "Tema", "Rojo/Negro. Controles touch grandes.")
+    c.Size = UDim2.new(1, -24, 0, 74)
+end
+
+-------------------- Mostrar sección inicial --------------------
+showSection("Main")
+
+-------------------- Botones Fly ↑/↓ (solo móvil) --------------------
+_G.__Ascend, _G.__Descend = false, false
+ascendBtn = Instance.new("TextButton", Root)
+ascendBtn.Size = UDim2.new(0, 48, 0, 48)
+ascendBtn.Position = UDim2.new(0.86, 0, 0.52, 0)
+ascendBtn.Text = "↑"
+ascendBtn.TextSize = 22
+ascendBtn.Font = Enum.Font.GothamBold
+ascendBtn.TextColor3 = Theme.text
+ascendBtn.BackgroundColor3 = Theme.accent
+ascendBtn.BorderSizePixel = 0
+round(ascendBtn, 12); stroke(ascendBtn,1)
+ascendBtn.Visible = false
+ascendBtn.MouseButton1Down:Connect(function() _G.__Ascend=true end)
+ascendBtn.MouseButton1Up:Connect(function() _G.__Ascend=false end)
+
+descendBtn = Instance.new("TextButton", Root)
+descendBtn.Size = UDim2.new(0, 48, 0, 48)
+descendBtn.Position = UDim2.new(0.86, 0, 0.62, 0)
+descendBtn.Text = "↓"
+descendBtn.TextSize = 22
+descendBtn.Font = Enum.Font.GothamBold
+descendBtn.TextColor3 = Theme.text
+descendBtn.BackgroundColor3 = Theme.accentDim
+descendBtn.BorderSizePixel = 0
+round(descendBtn, 12); stroke(descendBtn,1)
+descendBtn.Visible = false
+descendBtn.MouseButton1Down:Connect(function() _G.__Descend=true end)
+descendBtn.MouseButton1Up:Connect(function() _G.__Descend=false end)
+
+-------------------- Abrir / Cerrar panel --------------------
+local function openSheet()
+    sheet.Visible = true; dim.Visible = true
+    TweenService:Create(dim, TweenInfo.new(0.15), {BackgroundTransparency = 0.35}):Play()
+    TweenService:Create(sheet, TweenInfo.new(0.20, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        {Position = UDim2.new(0,0, 1 - sheet.Size.Y.Scale, 0)}):Play()
+end
+local function closeSheet()
+    TweenService:Create(dim, TweenInfo.new(0.12), {BackgroundTransparency = 1}):Play()
+    TweenService:Create(sheet, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+        {Position = UDim2.new(0,0, 1, 0)}):Play()
+    task.delay(0.2, function() sheet.Visible=false; dim.Visible=false end)
+end
+openBtn.MouseButton1Click:Connect(openSheet)
+closeBtn.MouseButton1Click:Connect(closeSheet)
+dim.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.Touch then closeSheet() end end)
+
+-------------------- Nav defaults --------------------
+navButtons["Main"].BackgroundColor3 = Theme.accentDim
+showSection("Main")
+
+-------------------- Respawn reaplicar --------------------
+LP.CharacterAdded:Connect(function()
+    task.wait(0.8)
+    if S.walkspeed then applyWalk() end
+    if S.god       then applyGod() end
+    if S.noclip    then enableNoclip() end
+    if S.esp       then toggleESP(true) end
+    if S.fly       then startFly() ascendBtn.Visible=true; descendBtn.Visible=true end
 end)
-mainButton.InputBegan:Connect(beginDrag)
-mainButton.InputChanged:Connect(updateDragInput)
-menuFrame.InputBegan:Connect(beginDrag)
-menuFrame.InputChanged:Connect(updateDragInput)
 
--- =======================
--- Inicializaciones
--- =======================
-updateNav()
-applyWalkspeed()
-if godModeEnabled then applyGodMode() end
-if noclipEnabled then enableNoclip() end
-updateESPNameSize()
-
-print("🎯 Menú multipanel cargado: ESP/PLAYER/TELETRANSPORTAR/SETTINGS (con Noclip y ESP mejorado).")
+print("✅ Admin Panel Mobile (rojo/negro) cargado.")
