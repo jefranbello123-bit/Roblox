@@ -1,8 +1,10 @@
 --[[
-    Enhanced ESP + WalkHack + Fly with Sidebar Menu, GodMode y Teletransportar
+    Panel ESP + WalkHack + Fly + GodMode con Teletransportar y Highlight
 
-    Este script amplía la interfaz del panel con nuevas secciones, colores y un apartado para teletransportar al jugador a otros jugadores.
-    Se ocultan las etiquetas de nombre predeterminadas de Roblox y se muestran etiquetas personalizadas.
+    Este script mejora el ESP para mostrar una silueta roja (Highlight) alrededor de cada jugador
+    en lugar de una caja sólida. Contiene secciones de ESP, PLAYER, TELETRANSPORTAR y SETTINGS
+    en un panel ampliado y reordenado.
+
     Nota: El uso de scripts de este tipo suele violar los Términos de Servicio de Roblox. Úsalo bajo tu responsabilidad.
 ]]
 
@@ -47,7 +49,7 @@ screenGui.Parent = CoreGui
 local mainButton = Instance.new("TextButton")
 mainButton.Size     = UDim2.new(0,70,0,70)
 mainButton.Position = UDim2.new(0.5,-35,0.1,0)
-mainButton.Text     = "☰" -- icono de hamburguesa para indicar menú
+mainButton.Text     = "☰"
 mainButton.TextSize = 32
 mainButton.Font     = Enum.Font.GothamBold
 mainButton.TextColor3       = Color3.new(1,1,1)
@@ -69,10 +71,10 @@ do
     grad.Rotation = 90
 end
 
--- Marco del menú
+-- Marco del menú (ampliado)
 local menuFrame = Instance.new("Frame")
-menuFrame.Size            = UDim2.new(0,300,0,380)
-menuFrame.Position        = UDim2.new(0.5,-150,0.1,0)
+menuFrame.Size            = UDim2.new(0,320,0,420)
+menuFrame.Position        = UDim2.new(0.5,-160,0.1,0)
 menuFrame.BackgroundColor3= Color3.fromRGB(30,30,50)
 menuFrame.BorderSizePixel = 0
 menuFrame.Visible         = false
@@ -122,21 +124,21 @@ do
     stroke.Color     = Color3.fromRGB(80,80,120)
 end
 
--- Panel de navegación (barra lateral)
+-- Panel de navegación (barra lateral ampliada)
 local navFrame = Instance.new("Frame", menuFrame)
-navFrame.Size     = UDim2.new(0,90,1,-35)
+navFrame.Size     = UDim2.new(0,100,1,-35)
 navFrame.Position = UDim2.new(0,0,0,35)
 navFrame.BackgroundColor3 = Color3.fromRGB(25,25,45)
 navFrame.BorderSizePixel  = 0
 
 -- Panel de contenido (zona derecha)
 local contentFrame = Instance.new("Frame", menuFrame)
-contentFrame.Size     = UDim2.new(1,-90,1,-35)
-contentFrame.Position = UDim2.new(0,90,0,35)
+contentFrame.Size     = UDim2.new(1,-100,1,-35)
+contentFrame.Position = UDim2.new(0,100,0,35)
 contentFrame.BackgroundTransparency = 1
 contentFrame.BorderSizePixel = 0
 
--- Función para crear botones de navegación con iconos
+-- Función para crear botones de navegación con icono
 local function makeNavButton(text, iconId, index)
     local btn = Instance.new("TextButton", navFrame)
     btn.Name     = text.."Nav"
@@ -148,7 +150,6 @@ local function makeNavButton(text, iconId, index)
     btn.TextColor3       = Color3.fromRGB(210,210,230)
     btn.BackgroundColor3 = Color3.fromRGB(35,35,55)
     btn.BorderSizePixel  = 0
-    -- icono
     local icon = Instance.new("ImageLabel", btn)
     icon.Name   = "Icon"
     icon.Size   = UDim2.new(0,20,0,20)
@@ -156,9 +157,9 @@ local function makeNavButton(text, iconId, index)
     icon.BackgroundTransparency = 1
     icon.Image = iconId or ""
     icon.ImageColor3 = Color3.fromRGB(160,160,200)
-    local labelPadding = Instance.new("UIPadding", btn)
-    labelPadding.PaddingLeft = UDim.new(0,30)
-    labelPadding.PaddingRight= UDim.new(0,5)
+    local padding = Instance.new("UIPadding", btn)
+    padding.PaddingLeft = UDim.new(0,30)
+    padding.PaddingRight= UDim.new(0,5)
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0,6)
     local stroke = Instance.new("UIStroke", btn)
     stroke.Thickness = 1
@@ -166,11 +167,9 @@ local function makeNavButton(text, iconId, index)
     return btn
 end
 
--- Espacio para nav index
+-- Tabla de botones y orden
 local navIndex = 1
 local navButtons = {}
-
--- Helper para añadir una sección
 local function addSection(name, iconId)
     local button = makeNavButton(name, iconId, navIndex)
     navButtons[name] = button
@@ -178,12 +177,11 @@ local function addSection(name, iconId)
     return button
 end
 
--- Botones de navegación (ESP, PLAYER, SETTINGS, TELETRANSPORTAR)
-local navEsp     = addSection("ESP", "rbxassetid://6031071058")
-local navPlayer  = addSection("PLAYER", "rbxassetid://6031071019")
-local navSettings= addSection("SETTINGS", "rbxassetid://6031280882")
--- Nuevo apartado de Teletransportar
-local navTP      = addSection("TELETRANSPORTAR", "rbxassetid://6035078885")
+-- Secciones (Teletransportar antes de Settings)
+local navEsp      = addSection("ESP", "rbxassetid://6031071058")
+local navPlayer   = addSection("PLAYER", "rbxassetid://6031071019")
+local navTP       = addSection("TELETRANSPORTAR", "rbxassetid://6035078885")
+local navSettings = addSection("SETTINGS", "rbxassetid://6031280882")
 
 -- Sección ESP
 local espContent = Instance.new("Frame", contentFrame)
@@ -211,7 +209,7 @@ local playerContent = Instance.new("Frame", contentFrame)
 playerContent.Size     = UDim2.new(1,0,1,0)
 playerContent.BackgroundTransparency = 1
 
--- Walkhack
+-- Walkhack toggle
 local walkToggle = Instance.new("TextButton", playerContent)
 walkToggle.Size     = UDim2.new(0.8,0,0,40)
 walkToggle.Position = UDim2.new(0.1,0,0.1,0)
@@ -229,7 +227,7 @@ do
     stroke.Color     = Color3.fromRGB(70,70,110)
 end
 
--- Fly
+-- Fly toggle
 local flyToggle = Instance.new("TextButton", playerContent)
 flyToggle.Size     = UDim2.new(0.8,0,0,40)
 flyToggle.Position = UDim2.new(0.1,0,0.25,0)
@@ -247,7 +245,7 @@ do
     stroke.Color     = Color3.fromRGB(70,70,110)
 end
 
--- GodMode
+-- GodMode toggle
 local godToggle = Instance.new("TextButton", playerContent)
 godToggle.Size     = UDim2.new(0.8,0,0,40)
 godToggle.Position = UDim2.new(0.1,0,0.40,0)
@@ -265,7 +263,7 @@ do
     stroke.Color     = Color3.fromRGB(70,70,110)
 end
 
--- Etiqueta de velocidad
+-- Velocidad y controles
 local speedLabel = Instance.new("TextLabel", playerContent)
 speedLabel.Size     = UDim2.new(0.8,0,0,25)
 speedLabel.Position = UDim2.new(0.1,0,0.55,0)
@@ -280,7 +278,6 @@ do
     corner.CornerRadius = UDim.new(0,10)
 end
 
--- Botones +50 / -50
 local speedUp = Instance.new("TextButton", playerContent)
 speedUp.Size     = UDim2.new(0.35,0,0,25)
 speedUp.Position = UDim2.new(0.1,0,0.65,0)
@@ -320,14 +317,14 @@ local settingsContent = Instance.new("Frame", contentFrame)
 settingsContent.Size     = UDim2.new(1,0,1,0)
 settingsContent.BackgroundTransparency = 1
 
--- Sección Teletransportar
+-- Sección TELETRANSPORTAR
 local tpContent = Instance.new("Frame", contentFrame)
 tpContent.Size     = UDim2.new(1,0,1,0)
 tpContent.BackgroundTransparency = 1
 
 -- Variables para TP
 local selectedTpTarget = nil
--- Contenedor para la lista de jugadores
+-- Lista de jugadores
 local tpListFrame = Instance.new("ScrollingFrame", tpContent)
 tpListFrame.Size     = UDim2.new(0.8,0,0.6,0)
 tpListFrame.Position = UDim2.new(0.1,0,0.1,0)
@@ -344,7 +341,7 @@ local listLayout = Instance.new("UIListLayout", tpListFrame)
 listLayout.Padding = UDim.new(0,4)
 listLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
--- Botón para refrescar la lista de jugadores
+-- Botón actualizar lista
 local tpRefreshButton = Instance.new("TextButton", tpContent)
 tpRefreshButton.Size     = UDim2.new(0.35,0,0,30)
 tpRefreshButton.Position = UDim2.new(0.1,0,0.75,0)
@@ -362,7 +359,7 @@ do
     stroke.Color     = Color3.fromRGB(70,70,110)
 end
 
--- Botón para teletransportar al jugador seleccionado
+-- Botón TP
 local tpActionButton = Instance.new("TextButton", tpContent)
 tpActionButton.Size     = UDim2.new(0.35,0,0,30)
 tpActionButton.Position = UDim2.new(0.55,0,0.75,0)
@@ -380,16 +377,14 @@ do
     stroke.Color     = Color3.fromRGB(70,70,110)
 end
 
--- Función para poblar la lista de jugadores
+-- Poblado de lista de jugadores
 local function populatePlayerList()
-    -- Limpiar lista existente
     selectedTpTarget = nil
     for _, child in ipairs(tpListFrame:GetChildren()) do
         if child:IsA("TextButton") then
             child:Destroy()
         end
     end
-    -- Añadir jugador para cada usuario en el servidor (excepto local)
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= player then
             local item = Instance.new("TextButton", tpListFrame)
@@ -405,7 +400,6 @@ local function populatePlayerList()
                 corner.CornerRadius = UDim.new(0,6)
             end
             local function selectItem()
-                -- Reset colours
                 for _, btn in ipairs(tpListFrame:GetChildren()) do
                     if btn:IsA("TextButton") then
                         btn.BackgroundColor3 = Color3.fromRGB(50,50,80)
@@ -419,10 +413,8 @@ local function populatePlayerList()
     end
 end
 
--- Actualizar la lista al pulsar refrescar
 tpRefreshButton.MouseButton1Click:Connect(populatePlayerList)
 
--- Teletransportar al jugador seleccionado
 tpActionButton.MouseButton1Click:Connect(function()
     if selectedTpTarget then
         local targetChar = selectedTpTarget.Character
@@ -431,14 +423,13 @@ tpActionButton.MouseButton1Click:Connect(function()
             local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
             local myRoot     = myChar:FindFirstChild("HumanoidRootPart")
             if targetRoot and myRoot then
-                -- Teletransportar al jugador con un pequeño offset para evitar colisiones
                 myRoot.CFrame = targetRoot.CFrame * CFrame.new(0, 3, 0)
             end
         end
     end
 end)
 
--- Control de tamaño de nombre de ESP
+-- Control del tamaño de nombre de ESP
 local espSizeLabel = Instance.new("TextLabel", settingsContent)
 espSizeLabel.Size     = UDim2.new(0.8,0,0,25)
 espSizeLabel.Position = UDim2.new(0.1,0,0.1,0)
@@ -524,14 +515,13 @@ do
     stroke.Color     = Color3.fromRGB(70,70,110)
 end
 
--- Función para actualizar la sección activa en la barra lateral
+-- Actualización de navegación
 local currentSection = "ESP"
 local function updateNav()
     for name, btn in pairs(navButtons) do
         if name == currentSection then
             btn.BackgroundColor3 = Color3.fromRGB(60,80,160)
             btn.TextColor3       = Color3.new(1,1,1)
-            -- Icon color vivo
             local icon = btn:FindFirstChild("Icon")
             if icon then icon.ImageColor3 = Color3.fromRGB(255,255,255) end
         else
@@ -541,28 +531,27 @@ local function updateNav()
             if icon then icon.ImageColor3 = Color3.fromRGB(160,160,200) end
         end
     end
-    espContent.Visible      = currentSection == "ESP"
-    playerContent.Visible   = currentSection == "PLAYER"
-    settingsContent.Visible = currentSection == "SETTINGS"
-    tpContent.Visible       = currentSection == "TELETRANSPORTAR"
+    espContent.Visible      = (currentSection == "ESP")
+    playerContent.Visible   = (currentSection == "PLAYER")
+    tpContent.Visible       = (currentSection == "TELETRANSPORTAR")
+    settingsContent.Visible = (currentSection == "SETTINGS")
 end
 local function showSection(name)
     currentSection = name
     updateNav()
 end
 
--- Conectar botones de navegación
+-- Conectar navegación
 navEsp.MouseButton1Click:Connect(function() showSection("ESP") end)
 navPlayer.MouseButton1Click:Connect(function() showSection("PLAYER") end)
-navSettings.MouseButton1Click:Connect(function() showSection("SETTINGS") end)
 navTP.MouseButton1Click:Connect(function()
     showSection("TELETRANSPORTAR")
-    -- refrescar la lista de jugadores al entrar en la sección
     populatePlayerList()
 end)
+navSettings.MouseButton1Click:Connect(function() showSection("SETTINGS") end)
 updateNav()
 
--- Lógica de WalkHack
+-- WalkHack
 local walkUpdateConnection
 local function applyWalkspeed()
     local char = player.Character
@@ -591,7 +580,7 @@ local function toggleWalkhack()
     end
 end
 
--- Lógica de Fly
+-- Fly
 local function startFlying()
     local char = player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
@@ -633,22 +622,18 @@ local function toggleFly()
     if flyEnabled then startFlying() else stopFlying() end
 end
 
--- Lógica de GodMode
+-- GodMode
 local function applyGodMode()
     local char = player.Character
     if not char then return end
     local hum = char:FindFirstChildOfClass("Humanoid")
     if not hum then return end
-    if not originalMaxHealth then
-        originalMaxHealth = hum.MaxHealth
-    end
+    if not originalMaxHealth then originalMaxHealth = hum.MaxHealth end
     hum.MaxHealth = math.huge
     hum.Health = hum.MaxHealth
     if godModeConnection then godModeConnection:Disconnect() end
     godModeConnection = hum.HealthChanged:Connect(function()
-        if hum.Health < hum.MaxHealth then
-            hum.Health = hum.MaxHealth
-        end
+        if hum.Health < hum.MaxHealth then hum.Health = hum.MaxHealth end
     end)
 end
 local function removeGodMode()
@@ -656,27 +641,18 @@ local function removeGodMode()
     if not char then return end
     local hum = char:FindFirstChildOfClass("Humanoid")
     if not hum then return end
-    if godModeConnection then
-        godModeConnection:Disconnect()
-        godModeConnection = nil
-    end
-    if originalMaxHealth then
-        hum.MaxHealth = originalMaxHealth
-    end
+    if godModeConnection then godModeConnection:Disconnect() godModeConnection=nil end
+    if originalMaxHealth then hum.MaxHealth = originalMaxHealth end
     hum.Health = hum.MaxHealth
 end
 local function toggleGodMode()
     godModeEnabled = not godModeEnabled
     godToggle.Text = godModeEnabled and "GODMODE: ON" or "GODMODE: OFF"
     godToggle.BackgroundColor3 = godModeEnabled and Color3.fromRGB(60,170,90) or Color3.fromRGB(170,60,70)
-    if godModeEnabled then
-        applyGodMode()
-    else
-        removeGodMode()
-    end
+    if godModeEnabled then applyGodMode() else removeGodMode() end
 end
 
--- Lógica de ESP
+-- ESP con silueta (Highlight)
 local function removeESP(target)
     if espFolders[target] then espFolders[target]:Destroy() espFolders[target] = nil end
     if espUpdateConnections[target] then espUpdateConnections[target]:Disconnect() espUpdateConnections[target]=nil end
@@ -699,18 +675,17 @@ local function createESP(target)
             for _,c in ipairs(folder:GetChildren()) do c:Destroy() end
             return
         end
-        -- Ocultar etiqueta de nombre predeterminada de Roblox para este jugador
-        pcall(function()
-            hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
-        end)
+        -- Ocultar nombre predeterminado
+        pcall(function() hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None end)
         for _,c in ipairs(folder:GetChildren()) do c:Destroy() end
-        local box = Instance.new("BoxHandleAdornment", folder)
-        box.Adornee      = root
-        box.AlwaysOnTop  = true
-        box.ZIndex       = 1
-        box.Size         = Vector3.new(4,6,2)
-        box.Color3       = Color3.new(1,0,0)
-        box.Transparency = 0.3
+        -- Resaltado de silueta
+        local highlight = Instance.new("Highlight", folder)
+        highlight.Adornee = char
+        highlight.FillColor = Color3.new(1,0,0)   -- rojo
+        highlight.FillTransparency = 0.7          -- semitransparente (silueta)
+        highlight.OutlineColor = Color3.new(1,0,0)
+        highlight.OutlineTransparency = 0
+        -- Etiqueta personalizada
         local billboard = Instance.new("BillboardGui", folder)
         billboard.Adornee     = root
         billboard.Size        = UDim2.new(0,200,0,40)
@@ -724,6 +699,7 @@ local function createESP(target)
         label.TextColor3         = Color3.new(1,1,1)
         label.TextSize           = espNameSize
         label.Font               = Enum.Font.GothamBold
+        -- Línea hacia el objetivo
         local line = Instance.new("LineHandleAdornment", folder)
         line.Adornee     = workspace.Terrain
         line.ZIndex      = 0
@@ -758,7 +734,7 @@ local function toggleESP()
     end
 end
 
--- Conexión de eventos de cada control
+-- Conectar eventos
 espToggle.MouseButton1Click:Connect(toggleESP)
 walkToggle.MouseButton1Click:Connect(toggleWalkhack)
 flyToggle.MouseButton1Click:Connect(toggleFly)
@@ -779,7 +755,7 @@ ascendButton.MouseButton1Up:Connect(function()   flyAscend = false end)
 descendButton.MouseButton1Down:Connect(function() flyDescend = true end)
 descendButton.MouseButton1Up:Connect(function()   flyDescend = false end)
 
--- Ajuste de tamaño de las etiquetas ESP
+-- Ajuste del tamaño del ESP
 local function updateESPNameSize()
     espSizeLabel.Text = "Tamaño de nombre ESP: "..espNameSize
 end
@@ -807,21 +783,19 @@ end
 mainButton.MouseButton1Click:Connect(openMenu)
 closeButton.MouseButton1Click:Connect(closeMenuFrame)
 
--- Reaplicar WalkHack y GodMode al reaparecer
+-- Reaplicar hacks al respawnear
 player.CharacterAdded:Connect(function()
     task.wait(1)
     applyWalkspeed()
-    if godModeEnabled then
-        applyGodMode()
-    end
+    if godModeEnabled then applyGodMode() end
 end)
--- Aplicar estados iniciales
 applyWalkspeed()
-if godModeEnabled then
-    applyGodMode()
-end
+if godModeEnabled then applyGodMode() end
 
--- Lógica de arrastre (no mueve la cámara)
+-- Inicializar tamaño de nombre en Settings
+updateESPNameSize()
+
+-- Arrastre del menú sin mover cámara
 local dragging, dragStart, startButtonPos, startMenuPos, dragInputRef = false, nil, nil, nil, nil
 local function beginDrag(input)
     if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -858,4 +832,4 @@ mainButton.InputChanged:Connect(updateDragInput)
 menuFrame.InputBegan:Connect(beginDrag)
 menuFrame.InputChanged:Connect(updateDragInput)
 
-print("🎯 Menú multipanel mejorado cargado. Pulsa el icono para abrir y navega entre ESP, PLAYER, SETTINGS y TELETRANSPORTAR.")
+print("🎯 Menú multipanel con Teletransportar y silueta resaltada cargado. Usa ESP, PLAYER, TELETRANSPORTAR y SETTINGS.")
