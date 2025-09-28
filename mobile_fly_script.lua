@@ -40,6 +40,13 @@ local espEnabled     = false
 local walkhackEnabled = false
 local currentSpeed   = 100
 
+-- Flight state
+local flyEnabled         = false
+local flyBodyGyro        = nil
+local flyBodyVelocity    = nil
+local flyUpdateConnection = nil
+local flyKeys            = {W=false,S=false,A=false,D=false,Q=false,E=false}
+
 -- Storage for ESP data
 local espFolders         = {}      -- [player] = Folder
 local espUpdateConnections = {}    -- [player] = RBXScriptConnection
@@ -71,6 +78,21 @@ local mainCorner = Instance.new("UICorner")
 mainCorner.CornerRadius = UDim.new(1, 0)
 mainCorner.Parent       = mainButton
 
+-- Outline for the menu button to add contrast
+local mainStroke = Instance.new("UIStroke")
+mainStroke.Thickness = 2
+mainStroke.Color     = Color3.fromRGB(50, 50, 50)
+mainStroke.Parent    = mainButton
+
+-- Gradient for the main button
+local buttonGradient = Instance.new("UIGradient")
+buttonGradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 170, 0)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 100, 0))
+}
+buttonGradient.Rotation = 90
+buttonGradient.Parent   = mainButton
+
 -- Menu frame
 local menuFrame = Instance.new("Frame")
 menuFrame.Size              = UDim2.new(0, 220, 0, 200)
@@ -84,6 +106,15 @@ menuFrame.Parent            = screenGui
 local menuCorner = Instance.new("UICorner")
 menuCorner.CornerRadius = UDim.new(0, 15)
 menuCorner.Parent       = menuFrame
+
+-- Gradient background for menu to give a subtle depth effect
+local menuGradient = Instance.new("UIGradient")
+menuGradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(50, 50, 50)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(25, 25, 25))
+}
+menuGradient.Rotation = 90
+menuGradient.Parent   = menuFrame
 
 -- Title label
 local title = Instance.new("TextLabel")
@@ -114,6 +145,12 @@ local closeCorner = Instance.new("UICorner")
 closeCorner.CornerRadius = UDim.new(0, 4)
 closeCorner.Parent       = closeButton
 
+-- Outline for close button
+local closeStroke = Instance.new("UIStroke")
+closeStroke.Thickness = 2
+closeStroke.Color     = Color3.fromRGB(50, 50, 50)
+closeStroke.Parent    = closeButton
+
 -- ESP button
 local espButton = Instance.new("TextButton")
 espButton.Size              = UDim2.new(0.9, 0, 0, 40)
@@ -129,6 +166,12 @@ espButton.Parent            = menuFrame
 local espCorner = Instance.new("UICorner")
 espCorner.CornerRadius = UDim.new(0, 8)
 espCorner.Parent       = espButton
+
+-- Outline for ESP button
+local espStroke = Instance.new("UIStroke")
+espStroke.Thickness = 2
+espStroke.Color     = Color3.fromRGB(50, 50, 50)
+espStroke.Parent    = espButton
 
 -- Walkhack button
 local walkButton = Instance.new("TextButton")
@@ -146,10 +189,38 @@ local walkCorner = Instance.new("UICorner")
 walkCorner.CornerRadius = UDim.new(0, 8)
 walkCorner.Parent       = walkButton
 
+-- Outline for walkhack button
+local walkStroke = Instance.new("UIStroke")
+walkStroke.Thickness = 2
+walkStroke.Color     = Color3.fromRGB(50, 50, 50)
+walkStroke.Parent    = walkButton
+
+-- Fly button
+local flyButton = Instance.new("TextButton")
+flyButton.Size              = UDim2.new(0.9, 0, 0, 40)
+flyButton.Position          = UDim2.new(0.05, 0, 0.6, 0)
+flyButton.Text              = "FLY: OFF"
+flyButton.TextSize          = 14
+flyButton.Font              = Enum.Font.GothamBold
+flyButton.TextColor3        = Color3.new(1, 1, 1)
+flyButton.BackgroundColor3  = Color3.fromRGB(200, 60, 60)
+flyButton.BorderSizePixel   = 0
+flyButton.Parent            = menuFrame
+
+local flyCorner = Instance.new("UICorner")
+flyCorner.CornerRadius = UDim.new(0, 8)
+flyCorner.Parent       = flyButton
+
+-- Outline for fly button
+local flyStroke = Instance.new("UIStroke")
+flyStroke.Thickness = 2
+flyStroke.Color     = Color3.fromRGB(50, 50, 50)
+flyStroke.Parent    = flyButton
+
 -- Speed label
 local speedLabel = Instance.new("TextLabel")
 speedLabel.Size             = UDim2.new(0.9, 0, 0, 25)
-speedLabel.Position         = UDim2.new(0.05, 0, 0.7, 0)
+speedLabel.Position         = UDim2.new(0.05, 0, 0.75, 0)
 speedLabel.Text             = "VELOCIDAD: " .. currentSpeed
 speedLabel.TextSize         = 12
 speedLabel.Font             = Enum.Font.Gotham
@@ -165,7 +236,7 @@ labelCorner.Parent       = speedLabel
 -- Speed adjustment buttons
 local upButton = Instance.new("TextButton")
 upButton.Size             = UDim2.new(0.4, 0, 0, 25)
-upButton.Position         = UDim2.new(0.05, 0, 0.85, 0)
+upButton.Position         = UDim2.new(0.05, 0, 0.88, 0)
 upButton.Text             = "+50"
 upButton.TextSize         = 12
 upButton.Font             = Enum.Font.GothamBold
@@ -178,9 +249,15 @@ local upCorner = Instance.new("UICorner")
 upCorner.CornerRadius = UDim.new(0, 8)
 upCorner.Parent       = upButton
 
+-- Outline for +50 button
+local upStroke = Instance.new("UIStroke")
+upStroke.Thickness = 2
+upStroke.Color     = Color3.fromRGB(50, 50, 50)
+upStroke.Parent    = upButton
+
 local downButton = Instance.new("TextButton")
 downButton.Size             = UDim2.new(0.4, 0, 0, 25)
-downButton.Position         = UDim2.new(0.55, 0, 0.85, 0)
+downButton.Position         = UDim2.new(0.55, 0, 0.88, 0)
 downButton.Text             = "-50"
 downButton.TextSize         = 12
 downButton.Font             = Enum.Font.GothamBold
@@ -192,6 +269,12 @@ downButton.Parent           = menuFrame
 local downCorner = Instance.new("UICorner")
 downCorner.CornerRadius = UDim.new(0, 8)
 downCorner.Parent       = downButton
+
+-- Outline for -50 button
+local downStroke = Instance.new("UIStroke")
+downStroke.Thickness = 2
+downStroke.Color     = Color3.fromRGB(50, 50, 50)
+downStroke.Parent    = downButton
 
 -- Internal flag for menu state
 local menuOpen = false
@@ -253,6 +336,100 @@ local function toggleWalkhack()
         applyWalkhack()
     end
 end
+
+-----------------------------------------------------------
+-- Fly Logic
+-----------------------------------------------------------
+
+-- Starts flight by adding BodyGyro and BodyVelocity to the
+-- character's HumanoidRootPart and connecting a RenderStepped loop
+-- that applies velocity based on pressed keys.
+local function startFlying()
+    local character = player.Character
+    if not character then return end
+    local root = character:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    -- Create gyro to orient the character with the camera
+    flyBodyGyro = Instance.new("BodyGyro")
+    flyBodyGyro.P = 9e4
+    flyBodyGyro.maxTorque = Vector3.new(9e9, 9e9, 9e9)
+    flyBodyGyro.CFrame = workspace.CurrentCamera.CFrame
+    flyBodyGyro.Parent = root
+    -- Create velocity body mover
+    flyBodyVelocity = Instance.new("BodyVelocity")
+    flyBodyVelocity.velocity = Vector3.new(0, 0, 0)
+    flyBodyVelocity.maxForce = Vector3.new(9e9, 9e9, 9e9)
+    flyBodyVelocity.P = 9e4
+    flyBodyVelocity.Parent = root
+    -- Connection to update velocity each frame
+    flyUpdateConnection = RunService.RenderStepped:Connect(function()
+        if not flyEnabled then return end
+        local cam = workspace.CurrentCamera
+        local direction = Vector3.new(0, 0, 0)
+        if flyKeys.W then direction = direction + cam.CFrame.LookVector end
+        if flyKeys.S then direction = direction - cam.CFrame.LookVector end
+        if flyKeys.A then direction = direction - cam.CFrame.RightVector end
+        if flyKeys.D then direction = direction + cam.CFrame.RightVector end
+        if flyKeys.E then direction = direction + cam.CFrame.UpVector end
+        if flyKeys.Q then direction = direction - cam.CFrame.UpVector end
+        if direction.Magnitude > 0 then
+            direction = direction.Unit
+        end
+        local speed = 50
+        flyBodyVelocity.velocity = direction * speed
+        flyBodyGyro.CFrame = cam.CFrame
+    end)
+end
+
+-- Stops flight by cleaning up body movers and disconnecting the update loop.
+local function stopFlying()
+    if flyUpdateConnection then
+        flyUpdateConnection:Disconnect()
+        flyUpdateConnection = nil
+    end
+    if flyBodyGyro then
+        flyBodyGyro:Destroy()
+        flyBodyGyro = nil
+    end
+    if flyBodyVelocity then
+        flyBodyVelocity:Destroy()
+        flyBodyVelocity = nil
+    end
+end
+
+-- Toggles the flight state and updates the UI
+local function toggleFly()
+    flyEnabled = not flyEnabled
+    if flyEnabled then
+        flyButton.Text             = "FLY: ON"
+        flyButton.BackgroundColor3 = Color3.fromRGB(60, 200, 60)
+        startFlying()
+    else
+        flyButton.Text             = "FLY: OFF"
+        flyButton.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+        stopFlying()
+    end
+end
+
+-- Capture movement keys for flight
+UserInputService.InputBegan:Connect(function(input, processed)
+    if processed then return end
+    if input.KeyCode == Enum.KeyCode.W then flyKeys.W = true end
+    if input.KeyCode == Enum.KeyCode.S then flyKeys.S = true end
+    if input.KeyCode == Enum.KeyCode.A then flyKeys.A = true end
+    if input.KeyCode == Enum.KeyCode.D then flyKeys.D = true end
+    if input.KeyCode == Enum.KeyCode.E then flyKeys.E = true end
+    if input.KeyCode == Enum.KeyCode.Q then flyKeys.Q = true end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.W then flyKeys.W = false end
+    if input.KeyCode == Enum.KeyCode.S then flyKeys.S = false end
+    if input.KeyCode == Enum.KeyCode.A then flyKeys.A = false end
+    if input.KeyCode == Enum.KeyCode.D then flyKeys.D = false end
+    if input.KeyCode == Enum.KeyCode.E then flyKeys.E = false end
+    if input.KeyCode == Enum.KeyCode.Q then flyKeys.Q = false end
+end)
 
 -----------------------------------------------------------
 -- ESP Logic
@@ -437,6 +614,7 @@ closeButton.MouseButton1Click:Connect(function()
 end)
 espButton.MouseButton1Click:Connect(toggleESP)
 walkButton.MouseButton1Click:Connect(toggleWalkhack)
+flyButton.MouseButton1Click:Connect(toggleFly)
 upButton.MouseButton1Click:Connect(function()
     currentSpeed = currentSpeed + 50
     speedLabel.Text = "VELOCIDAD: " .. currentSpeed
@@ -524,7 +702,8 @@ menuFrame.InputBegan:Connect(beginDrag)
 menuFrame.InputChanged:Connect(updateDragInput)
 
 -- Debug messages (printed to developer console)
-print("ðŸŽ¯ ESP + WALKHACK CARGADO!")
-print("ðŸ‘ï¸ ESP: Ver jugadores a travÃ©s de paredes")
-print("ðŸš€ WALKHACK: Velocidad aumentada")
-print("ðŸ’¡ Toca el botÃ³n naranja para abrir el menÃº")
+print("ðŸŽ¯ ESP + WALKHACK + FLY CARGADO!")
+print("ESP: Ver jugadores a travÃ©s de paredes")
+print("WALKHACK: Velocidad aumentada")
+print("FLY: Presiona W/A/S/D para volar en cualquier direcciÃ³n, Q y E para subir/bajar")
+print("ðŸ’¡ Pulsa el botÃ³n de MENÃš para abrir la interfaz")
