@@ -1,6 +1,5 @@
--- Fly, Speed, ESP y Lock-On para móviles.
+-- Fly, Speed, ESP, Lock-On y Heal para móviles.
 -- Coloca este LocalScript en StarterPlayerScripts o StarterGui (PlayerGui).
--- Emplea estas funciones sólo en tus propios juegos; su abuso en juegos públicos puede violar los Términos de Servicio de Roblox.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -15,16 +14,16 @@ screenGui.IgnoreGuiInset = true
 screenGui.DisplayOrder = 100
 screenGui.Parent = playerGui
 
--- Botón circular para abrir el menú
+-- Botón circular
 local dragFrame = Instance.new("Frame", screenGui)
-dragFrame.Size = UDim2.new(0, 60, 0, 60)
-dragFrame.Position = UDim2.new(0.5, -30, 0.5, -30)
+dragFrame.Size = UDim2.new(0,60,0,60)
+dragFrame.Position = UDim2.new(0.5,-30,0.5,-30)
 dragFrame.BackgroundTransparency = 1
 dragFrame.Active = true
 dragFrame.ZIndex = 100
 
 local openBtn = Instance.new("TextButton", dragFrame)
-openBtn.Size = UDim2.new(1, 0, 1, 0)
+openBtn.Size = UDim2.new(1,0,1,0)
 openBtn.BackgroundColor3 = Color3.fromRGB(220,120,30)
 openBtn.TextColor3 = Color3.new(1,1,1)
 openBtn.Font = Enum.Font.GothamBold
@@ -34,10 +33,10 @@ openBtn.BorderSizePixel = 0
 openBtn.ZIndex = 101
 Instance.new("UICorner", openBtn).CornerRadius = UDim.new(0.5,0)
 
--- Menú principal
+-- Menú principal (altura aumentada para Heal)
 local menuFrame = Instance.new("Frame", screenGui)
-menuFrame.Size = UDim2.new(0,200,0,310)
-menuFrame.Position = UDim2.new(0.5,-100,0.5,-155)
+menuFrame.Size = UDim2.new(0,200,0,360)
+menuFrame.Position = UDim2.new(0.5,-100,0.5,-180)
 menuFrame.BackgroundColor3 = Color3.fromRGB(20,20,20)
 menuFrame.Visible = false
 menuFrame.Active = true
@@ -68,8 +67,8 @@ closeBtn.BorderSizePixel = 0
 closeBtn.ZIndex = 101
 Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0.5,0)
 
--- Helper para crear botones del menú
-local function createToggleButton(name, text, pos, color)
+-- Helper de botones
+local function createToggleButton(name,text,pos,color)
     local btn = Instance.new("TextButton", menuFrame)
     btn.Name = name
     btn.Size = UDim2.new(0,140,0,40)
@@ -84,11 +83,12 @@ local function createToggleButton(name, text, pos, color)
     return btn
 end
 
--- Botones del menú: Fly, ESP, Speed y Lock
+-- Botones de Fly, ESP, Speed, Lock y Heal
 local flyToggleBtn   = createToggleButton("FlyToggle","Fly OFF",   UDim2.new(0.5,-70,0,50),  Color3.fromRGB(220,45,45))
 local espToggleBtn   = createToggleButton("ESPToggle","ESP OFF",   UDim2.new(0.5,-70,0,100), Color3.fromRGB(45,140,220))
 local speedToggleBtn = createToggleButton("SpeedToggle","Speed OFF",UDim2.new(0.5,-70,0,150),Color3.fromRGB(45,220,120))
 local lockToggleBtn  = createToggleButton("LockToggle","Lock OFF",  UDim2.new(0.5,-70,0,200),Color3.fromRGB(140,120,220))
+local healBtn        = createToggleButton("HealButton","Heal",     UDim2.new(0.5,-70,0,250),Color3.fromRGB(220,120,45))
 
 -- Botones laterales para vuelo y velocidad
 local ascendBtn = Instance.new("TextButton", screenGui)
@@ -139,7 +139,7 @@ speedDownBtn.BorderSizePixel = 0
 speedDownBtn.Visible = false
 speedDownBtn.ZIndex = 101
 
--- Variables de estado
+-- Variables de estado y funciones (Fly, ESP, Speed, Lock)
 local flying = false
 local bodyGyro, bodyVel, flyConnection
 local ascend, descend = false, false
@@ -165,10 +165,10 @@ local function startFly()
     if not hrp then return end
     bodyGyro = Instance.new("BodyGyro")
     bodyGyro.P = 9e4
-    bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+    bodyGyro.MaxTorque = Vector3.new(math.huge,math.huge,math.huge)
     bodyGyro.Parent = hrp
     bodyVel = Instance.new("BodyVelocity")
-    bodyVel.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    bodyVel.MaxForce = Vector3.new(math.huge,math.huge,math.huge)
     bodyVel.P = 9e4
     bodyVel.Parent = hrp
     flyConnection = RunService.RenderStepped:Connect(function()
@@ -199,7 +199,7 @@ end
 -- Funciones de ESP
 local function enableESP()
     espEnabled = true
-    for _, plr in ipairs(Players:GetPlayers()) do
+    for _,plr in ipairs(Players:GetPlayers()) do
         local char = plr.Character
         if char and not currentHighlights[plr] then
             local h = Instance.new("Highlight")
@@ -230,7 +230,7 @@ local function enableSpeed()
         local hum = char:FindFirstChildOfClass("Humanoid")
         if hum then
             originalWalkSpeed = originalWalkSpeed or hum.WalkSpeed
-            currentSpeed = math.max(hum.WalkSpeed * 2, originalWalkSpeed)
+            currentSpeed = math.max(hum.WalkSpeed*2, originalWalkSpeed)
             if currentSpeed > maxSpeed then currentSpeed = maxSpeed end
             hum.WalkSpeed = currentSpeed
             speedUpBtn.Visible = true
@@ -261,15 +261,15 @@ local function disableSpeed()
     if speedConnection then speedConnection:Disconnect() speedConnection = nil end
 end
 
--- Funciones de Lock-On con amplio ángulo de visión
+-- Funciones de Lock-On con ángulo de visión ampliado
 local function findTarget()
     local cam = workspace.CurrentCamera
     if not cam then return nil end
     local camPos = cam.CFrame.Position
     local camDir = cam.CFrame.LookVector
     local bestTarget = nil
-    local bestDot = 0.9 -- cuanto mayor el dot (producto punto), más alineado con el centro
-    for _, plr in ipairs(Players:GetPlayers()) do
+    local bestDot = 0.9
+    for _,plr in ipairs(Players:GetPlayers()) do
         if plr ~= localPlayer then
             local char = plr.Character
             local root = char and char:FindFirstChild("HumanoidRootPart")
@@ -277,7 +277,7 @@ local function findTarget()
                 local vec = root.Position - camPos
                 local distance = vec.Magnitude
                 if distance < 200 then
-                    local dir = vec / distance
+                    local dir = vec/distance
                     local dot = dir:Dot(camDir)
                     if dot > bestDot then
                         bestDot = dot
@@ -304,12 +304,7 @@ local function startLock()
         if cam then
             local camPos = cam.CFrame.Position
             local targetHRP = targetCharacter:FindFirstChild("HumanoidRootPart")
-            local lookAtPos
-            if targetHRP then
-                lookAtPos = targetHRP.Position
-            else
-                lookAtPos = targetCharacter:GetPivot().Position
-            end
+            local lookAtPos = targetHRP and targetHRP.Position or targetCharacter:GetPivot().Position
             cam.CFrame = CFrame.lookAt(camPos, lookAtPos)
         end
     end)
@@ -320,7 +315,7 @@ local function stopLock()
     targetCharacter = nil
 end
 
--- Mantener la velocidad al reaparecer
+-- Mantener velocidad al reaparecer
 task.spawn(function()
     local function onCharacter(char)
         char:WaitForChild("Humanoid")
@@ -329,7 +324,7 @@ task.spawn(function()
             local hum = char:FindFirstChildOfClass("Humanoid")
             if hum then
                 originalWalkSpeed = originalWalkSpeed or hum.WalkSpeed
-                currentSpeed = currentSpeed or math.min(originalWalkSpeed * 2, maxSpeed)
+                currentSpeed = currentSpeed or math.min(originalWalkSpeed*2, maxSpeed)
                 hum.WalkSpeed = currentSpeed
                 speedUpBtn.Visible = true
                 speedDownBtn.Visible = true
@@ -340,7 +335,7 @@ task.spawn(function()
     localPlayer.CharacterAdded:Connect(onCharacter)
 end)
 
--- Actualizar ESP para nuevos jugadores
+-- Actualizar ESP en nuevos jugadores
 Players.PlayerAdded:Connect(function(plr)
     plr.CharacterAdded:Connect(function(char)
         if espEnabled then
@@ -365,7 +360,7 @@ Players.PlayerRemoving:Connect(function(plr)
     end
 end)
 
--- Conexiones de los botones del menú
+-- Conexiones de los botones
 flyToggleBtn.MouseButton1Click:Connect(function()
     flying = not flying
     flyToggleBtn.Text = flying and "Fly ON" or "Fly OFF"
@@ -406,7 +401,18 @@ lockToggleBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- Botones para ajustar velocidad
+-- Botón de curación: restaura la salud al máximo
+healBtn.MouseButton1Click:Connect(function()
+    local char = localPlayer.Character
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum.Health = hum.MaxHealth
+        end
+    end
+end)
+
+-- Botones de velocidad
 speedUpBtn.MouseButton1Click:Connect(function()
     if speedEnabled then
         local char = localPlayer.Character
@@ -445,7 +451,7 @@ closeBtn.MouseButton1Click:Connect(function()
     dragFrame.Visible = true
 end)
 
--- Arrastrar el menú y el botón circular
+-- Arrastrar menú y botón circular
 local draggingFlag, startPosInput, startPosGui
 local function beginDrag(input, gui)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -469,9 +475,9 @@ local function updateDrag(input, gui)
         local guiSize = gui.AbsoluteSize
         local maxX = viewport.X - guiSize.X
         local maxY = viewport.Y - guiSize.Y
-        local clampedX = math.clamp(newPos.X.Offset,0,maxX)
-        local clampedY = math.clamp(newPos.Y.Offset,0,maxY)
-        gui.Position = UDim2.new(0,clampedX,0,clampedY)
+        local clampedX = math.clamp(newPos.X.Offset, 0, maxX)
+        local clampedY = math.clamp(newPos.Y.Offset, 0, maxY)
+        gui.Position = UDim2.new(0, clampedX, 0, clampedY)
     end
 end
 local function makeDraggable(gui)
@@ -481,4 +487,4 @@ end
 makeDraggable(dragFrame)
 makeDraggable(menuFrame)
 
-print("✅ Fly, ESP, Speed y Lock actualizados cargados")
+print("✅ Fly, ESP, Speed, Lock y Heal cargados")
