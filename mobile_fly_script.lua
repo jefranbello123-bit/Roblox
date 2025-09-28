@@ -1,4 +1,4 @@
--- 📱 SCRIPT DE VUELO CORREGIDO PARA MÓVIL
+-- 📱 SCRIPT DE VUELO CORREGIDO PARA MÓVIL (Joystick alineado a cámara)
 
 local Players = game:GetService("Players")
 local RS = game:GetService("RunService")
@@ -117,20 +117,14 @@ local function flyUpdate()
 
     local moveVector = Vector3.new(0, 0, 0)
 
-    -- Movimiento con joystick
+    -- Movimiento con joystick (alineado a cámara)
     if humanoid and humanoid.MoveDirection.Magnitude > 0 then
-        local moveDirection = humanoid.MoveDirection
-        local cameraDirection = cam.CFrame.LookVector
-        local cameraRight = cam.CFrame.RightVector
+        local camCF = cam.CFrame
+        local camForward = Vector3.new(camCF.LookVector.X, 0, camCF.LookVector.Z).Unit
+        local camRight = Vector3.new(camCF.RightVector.X, 0, camCF.RightVector.Z).Unit
 
-        local forwardMovement = cameraDirection * moveDirection.Z
-        local rightMovement = cameraRight * moveDirection.X
-
-        moveVector = Vector3.new(
-            forwardMovement.X + rightMovement.X,
-            0,
-            forwardMovement.Z + rightMovement.Z
-        )
+        local md = humanoid.MoveDirection
+        moveVector = (camForward * md.Z + camRight * md.X)
     end
 
     -- Movimiento vertical
