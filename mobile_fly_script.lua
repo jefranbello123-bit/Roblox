@@ -1,10 +1,9 @@
 --[[
-Admin Panel Mobile (Tema Rojo/Negro)
- - Interfaz móvil con navegación vertical y tarjetas compactas.
- - Funcionalidades: WalkSpeed, Fly (con ajuste de velocidad), Noclip, GodMode, Teleport.
- - Visuals: Wallhack (ESP) con silueta a través de paredes, línea guía y control de tamaño de nombres.
- - Botón “X” para cerrar el panel. Botones flotantes ↑/↓ para controlar el ascenso/descenso en Fly.
-⚠️ Puede violar los Términos de Servicio de Roblox. Úsalo bajo tu responsabilidad.
+Admin Panel Mobile (Tema Rojo/Negro) - Versión Móvil
+ - Interfaz móvil optimizada para iPhone
+ - Botones de Fly grandes y accesibles
+ - Control de ascenso/descenso con botones flotantes
+⚠️ Solo para pruebas en entornos privados.
 ]]
 
 -- Servicios
@@ -373,7 +372,7 @@ local function ensureWalk()
     end
 end
 
--- Fly
+-- Fly - VERSIÓN MEJORADA PARA MÓVIL
 local flyGyro, flyVel, flyConn; _G.__Ascend=false; _G.__Descend=false
 local function startFly()
     local char=LP.Character; if not char then return end
@@ -383,7 +382,16 @@ local function startFly()
     flyConn=RunService.RenderStepped:Connect(function()
         local dir=Vector3.new()
         local hum=char:FindFirstChildOfClass("Humanoid")
-        if hum then local mv=hum.MoveDirection; if mv.Magnitude>0 then dir+=mv end end
+        if hum then 
+            -- Usar MoveDirection del joystick virtual en móvil
+            local mv=hum.MoveDirection; 
+            if mv.Magnitude>0 then 
+                -- Convertir dirección local a global para vuelo suave
+                local camera = Workspace.CurrentCamera
+                local cf = camera.CFrame
+                dir += (cf.LookVector * mv.Z) + (cf.RightVector * mv.X)
+            end 
+        end
         if _G.__Ascend then dir+=Vector3.new(0,1,0) end
         if _G.__Descend then dir+=Vector3.new(0,-1,0) end
         if dir.Magnitude>0 then dir=dir.Unit end
@@ -553,34 +561,59 @@ local secTP     = createSection("Teleport")
 local secVis    = createSection("Visuals")
 local secInfo   = createSection("Info")
 
--- Botones de vuelo (flotantes)
+-- BOTONES DE FLY MEJORADOS PARA MÓVIL (iPhone)
 local ascendBtn = Instance.new("TextButton", Root)
-ascendBtn.Size = UDim2.new(0,42,0,42)
-ascendBtn.Position = UDim2.new(0.86,0,0.60,0)
-ascendBtn.Text = "↑"
-ascendBtn.TextSize = 20
-ascendBtn.Font = Enum.Font.GothamBold
+ascendBtn.Size = UDim2.new(0,80,0,80)  -- Más grande para móvil
+ascendBtn.Position = UDim2.new(0.85,0,0.60,0)
+ascendBtn.Text = "▲"
+ascendBtn.TextSize = 32
+ascendBtn.Font = Enum.Font.GothamBlack
 ascendBtn.TextColor3 = Theme.text
 ascendBtn.BackgroundColor3 = Theme.accent
 ascendBtn.BorderSizePixel=0
-round(ascendBtn,10); stroke(ascendBtn,1)
+round(ascendBtn,40)  -- Más redondeado
+stroke(ascendBtn,2)  -- Borde más grueso
 ascendBtn.Visible=false; ascendBtn.ZIndex=25
-ascendBtn.MouseButton1Down:Connect(function() _G.__Ascend=true end)
-ascendBtn.MouseButton1Up:Connect(function() _G.__Ascend=false end)
+
+-- Efectos táctiles para móvil
+ascendBtn.MouseButton1Down:Connect(function() 
+    _G.__Ascend=true 
+    ascendBtn.BackgroundColor3 = Theme.accentDim
+end)
+ascendBtn.MouseButton1Up:Connect(function() 
+    _G.__Ascend=false 
+    ascendBtn.BackgroundColor3 = Theme.accent
+end)
+ascendBtn.MouseLeave:Connect(function()
+    _G.__Ascend=false
+    ascendBtn.BackgroundColor3 = Theme.accent
+end)
 
 local descendBtn = Instance.new("TextButton", Root)
-descendBtn.Size = UDim2.new(0,42,0,42)
-descendBtn.Position = UDim2.new(0.86,0,0.71,0)
-descendBtn.Text = "↓"
-descendBtn.TextSize = 20
-descendBtn.Font = Enum.Font.GothamBold
+descendBtn.Size = UDim2.new(0,80,0,80)  -- Más grande para móvil
+descendBtn.Position = UDim2.new(0.85,0,0.75,0)
+descendBtn.Text = "▼"
+descendBtn.TextSize = 32
+descendBtn.Font = Enum.Font.GothamBlack
 descendBtn.TextColor3 = Theme.text
 descendBtn.BackgroundColor3 = Theme.accentDim
 descendBtn.BorderSizePixel=0
-round(descendBtn,10); stroke(descendBtn,1)
+round(descendBtn,40)  -- Más redondeado
+stroke(descendBtn,2)  -- Borde más grueso
 descendBtn.Visible=false; descendBtn.ZIndex=25
-descendBtn.MouseButton1Down:Connect(function() _G.__Descend=true end)
-descendBtn.MouseButton1Up:Connect(function() _G.__Descend=false end)
+
+descendBtn.MouseButton1Down:Connect(function() 
+    _G.__Descend=true 
+    descendBtn.BackgroundColor3 = Color3.fromRGB(120,25,25)
+end)
+descendBtn.MouseButton1Up:Connect(function() 
+    _G.__Descend=false 
+    descendBtn.BackgroundColor3 = Theme.accentDim
+end)
+descendBtn.MouseLeave:Connect(function()
+    _G.__Descend=false
+    descendBtn.BackgroundColor3 = Theme.accentDim
+end)
 
 ---------------------------------------------------------
 -- Rellenar sección Main
@@ -597,58 +630,76 @@ do
     sliderSpeed.Position = UDim2.new(0,10,0,36)
     sliderSpeed.Parent = card1
 
-    -- Fly
-    local card2 = makeCard(secMain, "Fly", "Vuelo con ajuste")
-    local swFly,_ = makeSwitch(S.fly, function(v)
+    -- Fly - VERSIÓN MÓVIL
+    local card2 = makeCard(secMain, "Fly", "Vuelo con joystick + botones ▲▼")
+    local swFly,setFly = makeSwitch(S.fly, function(v)
         S.fly=v
-        if v then startFly() else stopFly() end
-        ascendBtn.Visible = v and not sheet.Visible
-        descendBtn.Visible = v and not sheet.Visible
+        if v then 
+            startFly() 
+        else 
+            stopFly() 
+        end
+        -- Mostrar/ocultar botones de control de vuelo
+        ascendBtn.Visible = v
+        descendBtn.Visible = v
     end)
     swFly.AnchorPoint = Vector2.new(1,0.5)
     swFly.Position = UDim2.new(1,-10,0,20)
     swFly.Parent = card2
-    -- Ajuste de velocidad de vuelo con botones +/−
-    local row = Instance.new("Frame", card2)
-    row.BackgroundTransparency=1
-    row.Position=UDim2.new(0,10,0,36)
-    row.Size=UDim2.new(1,-20,0,26)
-    local minus = Instance.new("TextButton", row)
-    minus.Size = UDim2.new(0,26,0,26)
-    minus.Text = "-"
-    minus.Font = Enum.Font.GothamBold
-    minus.TextSize = 18
-    minus.TextColor3 = Theme.text
-    minus.BackgroundColor3 = Theme.accentDim
-    minus.BorderSizePixel=0
-    round(minus,6); stroke(minus,1)
-    local speedLbl = Instance.new("TextLabel", row)
-    speedLbl.AnchorPoint = Vector2.new(0.5,0.5)
-    speedLbl.Position = UDim2.new(0.5,0,0.5,0)
-    speedLbl.Size = UDim2.new(0,60,0,20)
-    speedLbl.BackgroundTransparency = 1
-    speedLbl.Font = Enum.Font.GothamBold
-    speedLbl.TextSize = 14
-    speedLbl.TextColor3 = Theme.text
-    speedLbl.Text = tostring(S.flySpeed)
-    local plus = Instance.new("TextButton", row)
-    plus.AnchorPoint = Vector2.new(1,0)
-    plus.Position = UDim2.new(1,0,0,0)
-    plus.Size = UDim2.new(0,26,0,26)
-    plus.Text = "+"
-    plus.Font = Enum.Font.GothamBold
-    plus.TextSize = 18
-    plus.TextColor3 = Theme.text
-    plus.BackgroundColor3 = Theme.accent
-    plus.BorderSizePixel=0
-    round(plus,6); stroke(plus,1)
-    minus.MouseButton1Click:Connect(function()
+    
+    -- Ajuste de velocidad de vuelo optimizado para móvil
+    local flyControlFrame = Instance.new("Frame", card2)
+    flyControlFrame.BackgroundTransparency=1
+    flyControlFrame.Position=UDim2.new(0,10,0,36)
+    flyControlFrame.Size=UDim2.new(1,-20,0,40)
+    
+    local flySpeedLabel = Instance.new("TextLabel", flyControlFrame)
+    flySpeedLabel.Size = UDim2.new(0.4,0,1,0)
+    flySpeedLabel.BackgroundTransparency = 1
+    flySpeedLabel.Font = Enum.Font.GothamBold
+    flySpeedLabel.TextSize = 14
+    flySpeedLabel.TextColor3 = Theme.text
+    flySpeedLabel.Text = "Velocidad: "..S.flySpeed
+    flySpeedLabel.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local flyControlButtons = Instance.new("Frame", flyControlFrame)
+    flyControlButtons.AnchorPoint = Vector2.new(1,0)
+    flyControlButtons.Position = UDim2.new(1,0,0,0)
+    flyControlButtons.Size = UDim2.new(0.5,0,1,0)
+    flyControlButtons.BackgroundTransparency = 1
+    
+    local flyMinus = Instance.new("TextButton", flyControlButtons)
+    flyMinus.Size = UDim2.new(0,36,0,36)
+    flyMinus.Text = "-"
+    flyMinus.Font = Enum.Font.GothamBlack
+    flyMinus.TextSize = 20
+    flyMinus.TextColor3 = Theme.text
+    flyMinus.BackgroundColor3 = Theme.accentDim
+    flyMinus.BorderSizePixel=0
+    round(flyMinus,18)
+    stroke(flyMinus,1)
+    
+    local flyPlus = Instance.new("TextButton", flyControlButtons)
+    flyPlus.AnchorPoint = Vector2.new(1,0)
+    flyPlus.Position = UDim2.new(1,0,0,0)
+    flyPlus.Size = UDim2.new(0,36,0,36)
+    flyPlus.Text = "+"
+    flyPlus.Font = Enum.Font.GothamBlack
+    flyPlus.TextSize = 20
+    flyPlus.TextColor3 = Theme.text
+    flyPlus.BackgroundColor3 = Theme.accent
+    flyPlus.BorderSizePixel=0
+    round(flyPlus,18)
+    stroke(flyPlus,1)
+    
+    flyMinus.MouseButton1Click:Connect(function()
         S.flySpeed = math.max(10, S.flySpeed - 10)
-        speedLbl.Text = tostring(S.flySpeed)
+        flySpeedLabel.Text = "Velocidad: "..S.flySpeed
     end)
-    plus.MouseButton1Click:Connect(function()
+    
+    flyPlus.MouseButton1Click:Connect(function()
         S.flySpeed = math.min(200, S.flySpeed + 10)
-        speedLbl.Text = tostring(S.flySpeed)
+        flySpeedLabel.Text = "Velocidad: "..S.flySpeed
     end)
 
     -- Noclip
@@ -795,7 +846,9 @@ showSection("Main")
 -- Abrir/Cerrar panel
 local function openSheet()
     sheet.Visible=true; dim.Visible=true; openBtn.Visible=false
-    ascendBtn.Visible = false; descendBtn.Visible = false
+    -- Ocultar botones de fly cuando el panel está abierto
+    ascendBtn.Visible = false
+    descendBtn.Visible = false
     TweenService:Create(dim, TweenInfo.new(0.15), {BackgroundTransparency=0.35}):Play()
     TweenService:Create(sheet, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
         {Position=UDim2.new(0,0,SHEET_TOP,0)}):Play()
@@ -807,7 +860,9 @@ local function closeSheet()
         {Position=UDim2.new(0,0,1,0)}):Play()
     task.delay(0.20,function()
         sheet.Visible=false; dim.Visible=false; openBtn.Visible=true
-        ascendBtn.Visible = S.fly; descendBtn.Visible = S.fly
+        -- Mostrar botones de fly si está activo
+        ascendBtn.Visible = S.fly
+        descendBtn.Visible = S.fly
     end)
 end
 
@@ -837,7 +892,15 @@ LP.CharacterAdded:Connect(function()
     if S.god then applyGod() end
     if S.noclip then enableNoclip() end
     if S.visuals and S.esp then toggleESP(true) end
-    if S.fly then startFly(); ascendBtn.Visible=true; descendBtn.Visible=true end
+    if S.fly then 
+        startFly()
+        ascendBtn.Visible = true
+        descendBtn.Visible = true
+    else
+        ascendBtn.Visible = false
+        descendBtn.Visible = false
+    end
 end)
 
-print("✅ Admin Panel mobile cargado.")
+print("✅ Admin Panel mobile cargado - VERSIÓN iPhone")
+print("📱 Controles Fly: Joystick virtual + botones ▲▼")
