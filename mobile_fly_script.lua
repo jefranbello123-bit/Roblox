@@ -1,957 +1,1515 @@
 --[[
-    Admin Panel MOBILE — Sidebar + Cards pequeñas (Rojo/Negro)
-    - Panel alto (arriba), nav vertical a la izquierda y contenido a la derecha.
-    - Cards compactas, separadas y con toggles/slider.
-    - FIX: WalkSpeed forzado cada frame cuando ON (algunos juegos lo resetean).
-    - Visuals: toggle general + ESP (Highlight + nombre AlwaysOnTop) + tamaño de fuente.
-    - Noclip (wallhack), Fly (↑/↓), GodMode, Teleport.
-
-    ⚠️ Puede violar TOS de Roblox. Úsalo bajo tu responsabilidad.
+    Mobile Admin Panel — Red & Black theme
+    Requirements:
+        * Single LocalScript under StarterGui creating UI under PlayerGui.
+        * Sidebar tabs (Main, Teleport, Visuals, Info) with cards.
+        * Permission gated via BoolValue "CanAdmin" under the player.
+        * Optional remotes: TeleportTo (RemoteEvent), SetGodMode (RemoteEvent).
+        * Client-only features (walk speed, fly, noclip) apply only to LocalPlayer.
+        * Visual aids only for developer-owned NPCs inside Workspace.NPCs.
+        * Touch-friendly controls (switches, sliders, big buttons) with Gotham fonts.
 ]]
 
 -------------------- Services --------------------
-local Players          = game:GetService("Players")
-local RunService       = game:GetService("RunService")
-local TweenService     = game:GetService("TweenService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
-local CoreGui          = game:GetService("CoreGui")
-local Workspace        = game:GetService("Workspace")
-local LP = Players.LocalPlayer
+local StarterGui = game:GetService("StarterGui")
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
--------------------- Posición del panel --------------------
-local SHEET_TOP    = 0.06   -- MÁS ARRIBA que antes (6% desde arriba)
-local SHEET_HEIGHT = 0.88   -- ocupa 88% de la pantalla
+local LocalPlayer = Players.LocalPlayer
 
--------------------- Tema --------------------
+-------------------- Constants --------------------
+local PANEL_TOP = 0.04
+local PANEL_HEIGHT = 0.88
+local SIDEBAR_WIDTH_SCALE = 0.28
+local PANEL_ZINDEX = 25
+
 local Theme = {
-    bg        = Color3.fromRGB(10,10,14),
-    sheet     = Color3.fromRGB(20,20,26),
-    left      = Color3.fromRGB(18,18,22),
-    card      = Color3.fromRGB(30,30,38),
-    text      = Color3.fromRGB(245,245,245),
-    subtext   = Color3.fromRGB(200,200,210),
-    accent    = Color3.fromRGB(220,45,45),
-    accentDim = Color3.fromRGB(160,25,25),
-    railOff   = Color3.fromRGB(70,70,80),
-    stroke    = Color3.fromRGB(70,70,90)
+    background = Color3.fromRGB(10, 10, 14),
+    panel = Color3.fromRGB(16, 16, 20),
+    sidebar = Color3.fromRGB(18, 18, 24),
+    card = Color3.fromRGB(26, 26, 34),
+    cardStroke = Color3.fromRGB(60, 60, 80),
+    text = Color3.fromRGB(240, 240, 240),
+    subtext = Color3.fromRGB(180, 180, 190),
+    accent = Color3.fromRGB(220, 30, 30),
+    accentDim = Color3.fromRGB(150, 20, 20),
+    scrim = Color3.fromRGB(0, 0, 0),
+    shadow = Color3.fromRGB(0, 0, 0)
 }
 
--------------------- Estado --------------------
-local S = {
-    visuals   = true,   -- nuevo toggle maestro de Visuals
-    esp       = true,   -- ESP interno (se respeta visuals)
-    espSize   = 22,
-    god       = false,
-    noclip    = false,
-    fly       = false,
-    walkspeed = false,
-    speed     = 120
+local TAB_NAMES = {"Main", "Teleport", "Visuals", "Info"}
+
+-------------------- State --------------------
+local State = {
+    activeTab = "Main",
+    canAdmin = false,
+    teleportPoints = {},
+    toasts = {},
+    fly = false,
+    flyAscend = 0,
+    flyForce = nil,
+    flyAlign = nil,
+    flyAttachment = nil,
+    flyConnection = nil,
+    noclip = false,
+    noclipConnection = nil,
+    walkspeedEnabled = false,
+    walkspeedValue = 16,
+    visualsEnabled = false,
+    espEnabled = false,
+    espFontSize = 22,
+    espFolder = nil,
+    espConnections = {},
+    godModeEnabled = false,
+    godRemoteAvailable = false,
+    teleportRemoteAvailable = false,
+    currentCharacter = nil,
+    currentHumanoid = nil,
+    reapplyConnection = nil,
+    ascendButton = nil,
+    descendButton = nil,
+    flyButtonContainer = nil,
+    uiMounted = false,
+    switchSetters = {}
 }
 
--------------------- Helpers UI --------------------
-local function round(inst, r)
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, r or 10)
-    c.Parent = inst
+-------------------- Utility --------------------
+local function getBoolValue(parent, name)
+    local object = parent:FindFirstChild(name)
+    if object and object:IsA("BoolValue") then
+        return object.Value
+    end
+    return nil
 end
 
-local function stroke(inst, th)
-    local s = Instance.new("UIStroke")
-    s.Thickness = th or 1
-    s.Color = Theme.stroke
-    s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    s.Parent = inst
+local function hasPermission()
+    if LocalPlayer and LocalPlayer.Parent then
+        return State.canAdmin
+    end
+    return false
 end
 
-local function pad(inst, l, t, r, b)
-    local p = Instance.new("UIPadding")
-    p.PaddingLeft = UDim.new(0, l or 0)
-    p.PaddingTop = UDim.new(0, t or 0)
-    p.PaddingRight = UDim.new(0, r or 0)
-    p.PaddingBottom = UDim.new(0, b or 0)
-    p.Parent = inst
+local function showToast(title, text)
+    task.spawn(function()
+        local ok, err = pcall(function()
+            StarterGui:SetCore("SendNotification", {
+                Title = title,
+                Text = text,
+                Duration = 2,
+                Button1 = "OK"
+            })
+        end)
+        if not ok then
+            warn("Notification failed:", err)
+        end
+    end)
+end
+
+local function tween(instance, props, info)
+    local tweenInfo = info or TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    local tweenObject = TweenService:Create(instance, tweenInfo, props)
+    tweenObject:Play()
+    return tweenObject
+end
+
+local function addCorner(instance, radius)
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, radius or 12)
+    corner.Parent = instance
+end
+
+local function addStroke(instance, thickness)
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Theme.cardStroke
+    stroke.Thickness = thickness or 1
+    stroke.Transparency = 0.3
+    stroke.Parent = instance
+end
+
+local function addPadding(instance, left, top, right, bottom)
+    local padding = Instance.new("UIPadding")
+    padding.PaddingLeft = UDim.new(0, left or 0)
+    padding.PaddingTop = UDim.new(0, top or 0)
+    padding.PaddingRight = UDim.new(0, right or 0)
+    padding.PaddingBottom = UDim.new(0, bottom or 0)
+    padding.Parent = instance
+end
+
+local function createLabel(parent, text, size, weight, color)
+    local label = Instance.new("TextLabel")
+    label.BackgroundTransparency = 1
+    label.Font = weight or Enum.Font.GothamSemibold
+    label.TextSize = size or 16
+    label.TextColor3 = color or Theme.text
+    label.Text = text or ""
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = parent
+    return label
 end
 
 local function makeSwitch(defaultOn, onChanged)
     local switch = Instance.new("Frame")
-    switch.Size = UDim2.new(0, 64, 0, 28)
-    switch.BackgroundColor3 = defaultOn and Theme.accent or Theme.railOff
+    switch.BackgroundColor3 = defaultOn and Theme.accent or Theme.cardStroke
     switch.BorderSizePixel = 0
-    round(switch, 14)
-    stroke(switch, 1)
+    switch.Size = UDim2.new(0, 64, 0, 28)
+    addCorner(switch, 14)
+    addStroke(switch, 1)
 
-    local knob = Instance.new("Frame", switch)
+    local knob = Instance.new("Frame")
+    knob.Parent = switch
     knob.Size = UDim2.new(0, 24, 0, 24)
-    knob.Position = defaultOn and UDim2.new(1, -26, 0, 2) or UDim2.new(0, 2, 0, 2)
-    knob.BackgroundColor3 = Theme.sheet
+    knob.BackgroundColor3 = Theme.panel
     knob.BorderSizePixel = 0
-    round(knob, 12)
-    stroke(knob, 1)
+    knob.Position = defaultOn and UDim2.new(1, -26, 0, 2) or UDim2.new(0, 2, 0, 2)
+    addCorner(knob, 12)
+    addStroke(knob, 1)
 
-    local btn = Instance.new("TextButton", switch)
-    btn.BackgroundTransparency = 1
-    btn.Size = UDim2.new(1, 0, 1, 0)
-    btn.Text = ""
+    local button = Instance.new("TextButton")
+    button.Parent = switch
+    button.BackgroundTransparency = 1
+    button.Size = UDim2.new(1, 0, 1, 0)
+    button.Text = ""
 
-    local val = defaultOn
-    local function set(v, anim)
-        val = v
-        local g1 = {Position = v and UDim2.new(1, -26, 0, 2) or UDim2.new(0, 2, 0, 2)}
-        local g2 = {BackgroundColor3 = v and Theme.accent or Theme.railOff}
-        if anim then
-            TweenService:Create(knob, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), g1):Play()
-            TweenService:Create(switch, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), g2):Play()
+    local value = defaultOn
+
+    local function setValue(newValue, animated)
+        value = newValue
+        if animated then
+            tween(knob, {Position = newValue and UDim2.new(1, -26, 0, 2) or UDim2.new(0, 2, 0, 2)}, TweenInfo.new(0.15))
+            tween(switch, {BackgroundColor3 = newValue and Theme.accent or Theme.cardStroke}, TweenInfo.new(0.15))
         else
-            knob.Position = g1.Position
-            switch.BackgroundColor3 = g2.BackgroundColor3
+            knob.Position = newValue and UDim2.new(1, -26, 0, 2) or UDim2.new(0, 2, 0, 2)
+            switch.BackgroundColor3 = newValue and Theme.accent or Theme.cardStroke
         end
         if onChanged then
-            onChanged(val)
+            onChanged(value)
         end
     end
 
-    btn.MouseButton1Click:Connect(function()
-        set(not val, true)
+    button.MouseButton1Click:Connect(function()
+        setValue(not value, true)
     end)
 
-    return switch, set
+    return switch, setValue
+end
+
+local function isPlayerOwnedPlace()
+    local ok, result = pcall(function()
+        return game.CreatorType, game.CreatorId
+    end)
+    if not ok or not result then
+        return false
+    end
+    local creatorType, creatorId = game.CreatorType, game.CreatorId
+    if creatorType == Enum.CreatorType.User then
+        return creatorId == LocalPlayer.UserId
+    end
+    return false
 end
 
 local function makeSlider(maxValue, step, defaultValue, onChanged)
     local holder = Instance.new("Frame")
-    holder.Size = UDim2.new(1, 0, 0, 34)
     holder.BackgroundTransparency = 1
+    holder.Size = UDim2.new(1, 0, 0, 40)
 
-    local bar = Instance.new("Frame", holder)
+    local bar = Instance.new("Frame")
+    bar.Parent = holder
     bar.AnchorPoint = Vector2.new(0, 0.5)
     bar.Position = UDim2.new(0, 0, 0.5, 0)
     bar.Size = UDim2.new(1, -70, 0, 6)
-    bar.BackgroundColor3 = Theme.railOff
+    bar.BackgroundColor3 = Theme.cardStroke
     bar.BorderSizePixel = 0
-    round(bar, 3)
+    addCorner(bar, 3)
 
-    local fill = Instance.new("Frame", bar)
-    fill.Size = UDim2.new(math.clamp(defaultValue / maxValue, 0, 1), 0, 1, 0)
+    local fill = Instance.new("Frame")
+    fill.Parent = bar
+    fill.Size = UDim2.new(0, 0, 1, 0)
     fill.BackgroundColor3 = Theme.accent
     fill.BorderSizePixel = 0
-    round(fill, 3)
+    addCorner(fill, 3)
 
-    local knob = Instance.new("Frame", bar)
+    local knob = Instance.new("Frame")
+    knob.Parent = bar
     knob.AnchorPoint = Vector2.new(0.5, 0.5)
-    knob.Position = UDim2.new(math.clamp(defaultValue / maxValue, 0, 1), 0, 0.5, 0)
-    knob.Size = UDim2.new(0, 14, 0, 14)
-    knob.BackgroundColor3 = Theme.sheet
+    knob.Position = UDim2.new(0, 0, 0.5, 0)
+    knob.Size = UDim2.new(0, 16, 0, 16)
+    knob.BackgroundColor3 = Theme.panel
     knob.BorderSizePixel = 0
-    round(knob, 7)
-    stroke(knob, 1)
+    addCorner(knob, 8)
+    addStroke(knob, 1)
 
-    local valueLabel = Instance.new("TextLabel", holder)
+    local valueLabel = Instance.new("TextLabel")
+    valueLabel.Parent = holder
+    valueLabel.BackgroundTransparency = 1
+    valueLabel.Font = Enum.Font.GothamMedium
+    valueLabel.TextSize = 16
+    valueLabel.TextColor3 = Theme.text
+    valueLabel.TextXAlignment = Enum.TextXAlignment.Right
     valueLabel.AnchorPoint = Vector2.new(1, 0.5)
     valueLabel.Position = UDim2.new(1, 0, 0.5, 0)
-    valueLabel.Size = UDim2.new(0, 60, 0, 20)
-    valueLabel.BackgroundTransparency = 1
-    valueLabel.Font = Enum.Font.GothamBold
-    valueLabel.TextSize = 14
-    valueLabel.TextColor3 = Theme.text
-    valueLabel.Text = tostring(defaultValue)
+    valueLabel.Size = UDim2.new(0, 60, 1, 0)
 
-    local dragging = false
-    local function setFromX(x)
-        local rel = math.clamp((x - bar.AbsolutePosition.X) / math.max(1, bar.AbsoluteSize.X), 0, 1)
-        local raw = rel * maxValue
-        local stepped = math.floor((raw / step) + 0.5) * step
-        stepped = math.clamp(stepped, 0, maxValue)
-        fill.Size = UDim2.new(stepped / maxValue, 0, 1, 0)
-        knob.Position = UDim2.new(stepped / maxValue, 0, 0.5, 0)
-        valueLabel.Text = tostring(stepped)
-        if onChanged then
-            onChanged(stepped)
+    local value = defaultValue or 0
+    local function updateVisual(animated)
+        local fraction = math.clamp(value / maxValue, 0, 1)
+        local newWidth = UDim2.new(fraction, 0, 1, 0)
+        local knobPosition = UDim2.new(fraction, 0, 0.5, 0)
+        valueLabel.Text = tostring(math.floor(value + 0.5))
+        if animated then
+            tween(fill, {Size = newWidth}, TweenInfo.new(0.1))
+            tween(knob, {Position = knobPosition}, TweenInfo.new(0.1))
+        else
+            fill.Size = newWidth
+            knob.Position = knobPosition
         end
     end
 
-    local function begin(input)
-        dragging = true
-        setFromX(input.Position.X)
+    updateVisual(false)
+
+    local function setValue(newValue, animated)
+        newValue = math.clamp(newValue, 0, maxValue)
+        newValue = math.floor(newValue / step + 0.5) * step
+        value = newValue
+        updateVisual(animated)
+        if onChanged then
+            onChanged(value)
+        end
     end
 
-    local function finish()
+    local dragging = false
+
+    local function positionToValue(x)
+        local barSize = bar.AbsoluteSize.X
+        if barSize <= 0 then
+            return value
+        end
+        local relative = math.clamp((x - bar.AbsolutePosition.X) / barSize, 0, 1)
+        return relative * maxValue
+    end
+
+    local function beginDrag()
+        dragging = true
+    end
+
+    local function endDrag()
         dragging = false
     end
 
-    local function move(input)
-        if dragging then
-            setFromX(input.Position.X)
+    knob.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            beginDrag()
         end
-    end
+    end)
 
     bar.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-            begin(input)
-        end
-    end)
-    bar.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-            finish()
-        end
-    end)
-    knob.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-            begin(input)
-        end
-    end)
-    knob.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-            finish()
-        end
-    end)
-    UserInputService.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement then
-            move(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            local targetValue = positionToValue(input.Position.X)
+            setValue(targetValue, true)
+            beginDrag()
         end
     end)
 
-    return holder
+    knob.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            endDrag()
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch then
+            endDrag()
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local targetValue = positionToValue(input.Position.X)
+            setValue(targetValue, false)
+        end
+    end)
+
+    return holder, setValue
 end
 
-local function makeCard(parent, title, subtitle)
+local function makeCard(title, subtitle)
     local card = Instance.new("Frame")
-    card.Size = UDim2.new(1, 0, 0, subtitle and 84 or 66)
     card.BackgroundColor3 = Theme.card
     card.BorderSizePixel = 0
-    round(card, 12)
-    stroke(card, 1)
-    card.Parent = parent
+    card.Size = UDim2.new(1, -12, 0, subtitle and 140 or 120)
+    card.AutomaticSize = Enum.AutomaticSize.Y
+    addCorner(card, 16)
+    addStroke(card, 1)
+    addPadding(card, 16, 16, 16, 16)
 
-    local t = Instance.new("TextLabel", card)
-    t.BackgroundTransparency = 1
-    t.Position = UDim2.new(0, 12, 0, 8)
-    t.Size = UDim2.new(1, -24, 0, 20)
-    t.Text = title
-    t.Font = Enum.Font.GothamBold
-    t.TextSize = 16
-    t.TextColor3 = Theme.text
-    t.TextXAlignment = Enum.TextXAlignment.Left
+    local layout = Instance.new("UIListLayout")
+    layout.Parent = card
+    layout.FillDirection = Enum.FillDirection.Vertical
+    layout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+    layout.VerticalAlignment = Enum.VerticalAlignment.Top
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Padding = UDim.new(0, 8)
+
+    local titleLabel = createLabel(card, title or "Card Title", 20, Enum.Font.GothamBold)
+    titleLabel.LayoutOrder = 1
 
     if subtitle then
-        local s = Instance.new("TextLabel", card)
-        s.BackgroundTransparency = 1
-        s.Position = UDim2.new(0, 12, 0, 30)
-        s.Size = UDim2.new(1, -24, 0, 18)
-        s.Text = subtitle
-        s.Font = Enum.Font.Gotham
-        s.TextSize = 13
-        s.TextColor3 = Theme.subtext
-        s.TextXAlignment = Enum.TextXAlignment.Left
+        local subtitleLabel = createLabel(card, subtitle, 16, Enum.Font.Gotham, Theme.subtext)
+        subtitleLabel.LayoutOrder = 2
     end
 
     return card
 end
 
--------------------- Roots y capas --------------------
-local Root = Instance.new("ScreenGui")
-Root.Name = "AdminPanel_Mobile_RedBlack_Sidebar"
-Root.ResetOnSpawn = false
-Root.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-Root.Parent = CoreGui
+local function ensurePlayerGui()
+    if not LocalPlayer then
+        return nil
+    end
+    local playerGui = LocalPlayer:WaitForChild("PlayerGui")
+    return playerGui
+end
 
--- Capa para ESP en PlayerGui
-local ESPGui = Instance.new("ScreenGui")
-ESPGui.Name = "ESP_Layer"
-ESPGui.ResetOnSpawn = false
-ESPGui.IgnoreGuiInset = true
-ESPGui.Parent = LP:WaitForChild("PlayerGui")
+local function cleanConnections(tableToClean)
+    if not tableToClean then
+        return
+    end
+    for key, connection in pairs(tableToClean) do
+        if typeof(connection) == "RBXScriptConnection" then
+            connection:Disconnect()
+            tableToClean[key] = nil
+        elseif typeof(connection) == "table" and connection.Disconnect then
+            connection:Disconnect()
+            tableToClean[key] = nil
+        end
+    end
+end
 
--------------------- Botón Menu (izquierda media) + draggable --------------------
-local openBtn = Instance.new("TextButton")
-openBtn.Name = "OpenMenu"
-openBtn.Size = UDim2.new(0, 64, 0, 64)
-openBtn.Position = UDim2.new(0.04, 0, 0.40, 0)
-openBtn.Text = "Menu"
-openBtn.TextSize = 16
-openBtn.Font = Enum.Font.GothamBlack
-openBtn.TextColor3 = Theme.text
-openBtn.BackgroundColor3 = Theme.accent
-openBtn.BorderSizePixel = 0
-round(openBtn, 32)
-stroke(openBtn, 1)
-openBtn.ZIndex = 30
-openBtn.Parent = Root
+-------------------- Remotes & Teleport Points --------------------
+local Remotes = {}
+local TeleportTargets = {}
 
-do -- drag
+local function detectRemotes()
+    local remoteFolder = ReplicatedStorage:FindFirstChild("Remotes")
+    if remoteFolder then
+        Remotes.teleport = remoteFolder:FindFirstChild("TeleportTo")
+        Remotes.godMode = remoteFolder:FindFirstChild("SetGodMode")
+    else
+        Remotes.teleport = ReplicatedStorage:FindFirstChild("TeleportTo")
+        Remotes.godMode = ReplicatedStorage:FindFirstChild("SetGodMode")
+    end
+    State.teleportRemoteAvailable = Remotes.teleport ~= nil
+    State.godRemoteAvailable = Remotes.godMode ~= nil
+    if not State.teleportRemoteAvailable then
+        showToast("Admin Panel", "TeleportTo remote not found")
+    end
+    if not State.godRemoteAvailable then
+        showToast("Admin Panel", "SetGodMode remote not found")
+    end
+end
+
+local function loadTeleportPoints()
+    table.clear(TeleportTargets)
+    local folder = Workspace:FindFirstChild("TeleportPoints")
+    if not folder then
+        return
+    end
+    for _, child in ipairs(folder:GetChildren()) do
+        if child:IsA("BasePart") then
+            table.insert(TeleportTargets, child)
+        end
+    end
+    table.sort(TeleportTargets, function(a, b)
+        return a.Name:lower() < b.Name:lower()
+    end)
+end
+
+-------------------- ESP Helpers --------------------
+local ESPObjects = {}
+
+local function clearESP()
+    for model, data in pairs(ESPObjects) do
+        if data.connections then
+            for _, conn in ipairs(data.connections) do
+                conn:Disconnect()
+            end
+        end
+        if data.highlight then
+            data.highlight:Destroy()
+        end
+        if data.billboard then
+            data.billboard:Destroy()
+        end
+        ESPObjects[model] = nil
+    end
+end
+
+local function isModelOwnedNPC(model)
+    if not model or not model:IsA("Model") then
+        return false
+    end
+    local parent = model.Parent
+    while parent do
+        if parent == Workspace then
+            break
+        end
+        parent = parent.Parent
+    end
+    if not parent then
+        return false
+    end
+    local npcsFolder = Workspace:FindFirstChild("NPCs")
+    if not npcsFolder then
+        return false
+    end
+    return model:IsDescendantOf(npcsFolder)
+end
+
+local function applyESPToModel(model)
+    if not model:IsA("Model") then
+        return
+    end
+    if ESPObjects[model] then
+        return
+    end
+
+    local primaryPart = model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart")
+    if not primaryPart then
+        return
+    end
+
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "AdminPanelHighlight"
+    highlight.FillColor = Theme.accent
+    highlight.OutlineColor = Theme.accentDim
+    highlight.FillTransparency = 0.75
+    highlight.OutlineTransparency = 0
+    highlight.Adornee = model
+    highlight.Parent = model
+
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "AdminPanelESP"
+    billboard.Size = UDim2.new(0, 200, 0, 50)
+    billboard.AlwaysOnTop = true
+    billboard.LightInfluence = 0
+    billboard.MaxDistance = 500
+    billboard.Adornee = model
+    billboard.Parent = primaryPart
+
+    local label = Instance.new("TextLabel")
+    label.BackgroundTransparency = 1
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.Font = Enum.Font.GothamBold
+    label.TextColor3 = Theme.accent
+    label.TextStrokeTransparency = 0.5
+    label.Text = model.Name
+    label.Parent = billboard
+
+    local function updateFontSize()
+        label.TextSize = State.espFontSize
+    end
+
+    updateFontSize()
+
+    local connections = {}
+    table.insert(connections, model.AncestryChanged:Connect(function(_, parent)
+        if not parent or not model:IsDescendantOf(Workspace) then
+            clearESP()
+        end
+    end))
+
+    ESPObjects[model] = {
+        highlight = highlight,
+        billboard = billboard,
+        label = label,
+        connections = connections
+    }
+end
+
+local function refreshESP()
+    clearESP()
+    if not State.visualsEnabled or not State.espEnabled then
+        return
+    end
+    local folder = Workspace:FindFirstChild("NPCs")
+    if not folder then
+        return
+    end
+    for _, model in ipairs(folder:GetChildren()) do
+        if isModelOwnedNPC(model) then
+            applyESPToModel(model)
+        end
+    end
+end
+
+local function setEspSize(size)
+    State.espFontSize = size
+    for _, data in pairs(ESPObjects) do
+        if data.label then
+            data.label.TextSize = size
+        end
+    end
+end
+
+local function setVisualsEnabled(enabled)
+    State.visualsEnabled = enabled
+    if not enabled then
+        clearESP()
+    else
+        refreshESP()
+    end
+end
+
+local function setEspEnabled(enabled)
+    State.espEnabled = enabled
+    refreshESP()
+end
+
+-------------------- Noclip Tracking --------------------
+local noclipOriginalCollide = {}
+
+local function clearNoclipTracking()
+    for part, _ in pairs(noclipOriginalCollide) do
+        noclipOriginalCollide[part] = nil
+    end
+end
+
+-------------------- UI Elements --------------------
+local ScreenGui
+local FloatingButton
+local Scrim
+local Panel
+local Sidebar
+local ContentFrame
+local TabButtons = {}
+local CardsByTab = {}
+
+-------------------- UI Construction --------------------
+local function createFloatingButton(parent)
+    local button = Instance.new("ImageButton")
+    button.Name = "AdminPanelMenuButton"
+    button.Size = UDim2.new(0, 64, 0, 64)
+    button.Position = UDim2.new(0, 12, 0.5, -32)
+    button.BackgroundColor3 = Theme.accent
+    button.BorderSizePixel = 0
+    button.Image = "rbxassetid://0"
+    addCorner(button, 32)
+    addStroke(button, 1)
+
+    local icon = Instance.new("TextLabel")
+    icon.BackgroundTransparency = 1
+    icon.Size = UDim2.new(1, 0, 1, 0)
+    icon.Font = Enum.Font.GothamBold
+    icon.Text = "Menu"
+    icon.TextColor3 = Theme.text
+    icon.TextSize = 18
+    icon.Parent = button
+
     local dragging = false
-    local startPos
-    local start
-    openBtn.InputBegan:Connect(function(input)
+    local dragOffset = Vector2.new()
+
+    button.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
-            start = input.Position
-            startPos = openBtn.Position
+            dragOffset = button.AbsolutePosition - input.Position
+        elseif input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragOffset = button.AbsolutePosition - input.Position
         end
     end)
-    openBtn.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Touch then
+
+    button.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
             dragging = false
         end
     end)
+
     UserInputService.InputChanged:Connect(function(input)
-        if dragging and input.UserInputType == Enum.UserInputType.Touch then
-            local delta = input.Position - start
-            openBtn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        if dragging and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then
+            local newPosition = input.Position + dragOffset
+            button.Position = UDim2.new(0, math.clamp(newPosition.X, 0, parent.AbsoluteSize.X - button.AbsoluteSize.X), 0, math.clamp(newPosition.Y, 0, parent.AbsoluteSize.Y - button.AbsoluteSize.Y))
         end
+    end)
+
+    return button
+end
+
+local function createScrim(parent)
+    local scrim = Instance.new("TextButton")
+    scrim.Name = "AdminPanelScrim"
+    scrim.BackgroundColor3 = Theme.scrim
+    scrim.BackgroundTransparency = 1
+    scrim.BorderSizePixel = 0
+    scrim.Size = UDim2.new(1, 0, 1, 0)
+    scrim.Text = ""
+    scrim.Visible = false
+    scrim.ZIndex = PANEL_ZINDEX - 1
+    scrim.AutoButtonColor = false
+    scrim.Parent = parent
+    return scrim
+end
+
+local function createPanel(parent)
+    local panel = Instance.new("Frame")
+    panel.Name = "AdminPanel"
+    panel.AnchorPoint = Vector2.new(0.5, 0)
+    panel.Position = UDim2.new(0.5, 0, PANEL_TOP - 1, 0)
+    panel.Size = UDim2.new(0.92, 0, PANEL_HEIGHT, 0)
+    panel.BackgroundColor3 = Theme.panel
+    panel.BorderSizePixel = 0
+    panel.Visible = false
+    panel.ZIndex = PANEL_ZINDEX
+    addCorner(panel, 20)
+    addStroke(panel, 1)
+    addPadding(panel, 12, 12, 12, 12)
+    panel.Parent = parent
+
+    local shadow = Instance.new("ImageLabel")
+    shadow.Name = "Shadow"
+    shadow.BackgroundTransparency = 1
+    shadow.Image = "rbxassetid://1316045217"
+    shadow.ImageTransparency = 0.2
+    shadow.ScaleType = Enum.ScaleType.Slice
+    shadow.SliceCenter = Rect.new(10, 10, 118, 118)
+    shadow.Size = UDim2.new(1, 30, 1, 30)
+    shadow.Position = UDim2.new(0.5, -15, 0.5, -15)
+    shadow.ZIndex = PANEL_ZINDEX - 1
+    shadow.Parent = panel
+
+    local layout = Instance.new("UIListLayout")
+    layout.Parent = panel
+    layout.FillDirection = Enum.FillDirection.Horizontal
+    layout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+    layout.VerticalAlignment = Enum.VerticalAlignment.Top
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Padding = UDim.new(0, 12)
+
+    return panel
+end
+
+local function createSidebar(parent)
+    local sidebar = Instance.new("Frame")
+    sidebar.Name = "Sidebar"
+    sidebar.BackgroundColor3 = Theme.sidebar
+    sidebar.BorderSizePixel = 0
+    sidebar.LayoutOrder = 1
+    sidebar.Size = UDim2.new(SIDEBAR_WIDTH_SCALE, 0, 1, -12)
+    addCorner(sidebar, 18)
+    addStroke(sidebar, 1)
+    addPadding(sidebar, 12, 12, 12, 12)
+    sidebar.Parent = parent
+
+    local layout = Instance.new("UIListLayout")
+    layout.Parent = sidebar
+    layout.FillDirection = Enum.FillDirection.Vertical
+    layout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+    layout.VerticalAlignment = Enum.VerticalAlignment.Top
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Padding = UDim.new(0, 8)
+
+    return sidebar
+end
+
+local function createContent(parent)
+    local holder = Instance.new("Frame")
+    holder.Name = "ContentHolder"
+    holder.BackgroundTransparency = 1
+    holder.LayoutOrder = 2
+    holder.Size = UDim2.new(1 - SIDEBAR_WIDTH_SCALE, -12, 1, -12)
+    holder.Parent = parent
+
+    local content = Instance.new("ScrollingFrame")
+    content.Name = "Content"
+    content.Size = UDim2.new(1, 0, 1, 0)
+    content.BackgroundTransparency = 1
+    content.BorderSizePixel = 0
+    content.ScrollBarThickness = 4
+    content.CanvasSize = UDim2.new(0, 0, 0, 0)
+    content.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    content.Parent = holder
+
+    local layout = Instance.new("UIListLayout")
+    layout.Parent = content
+    layout.FillDirection = Enum.FillDirection.Vertical
+    layout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+    layout.VerticalAlignment = Enum.VerticalAlignment.Top
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Padding = UDim.new(0, 12)
+
+    return holder, content
+end
+
+local function setActiveTab(tabName)
+    if State.activeTab == tabName then
+        return
+    end
+    State.activeTab = tabName
+    for name, button in pairs(TabButtons) do
+        if name == tabName then
+            tween(button, {BackgroundColor3 = Theme.accent}, TweenInfo.new(0.15))
+            button.Icon.TextColor3 = Theme.text
+        else
+            tween(button, {BackgroundColor3 = Theme.sidebar}, TweenInfo.new(0.15))
+            button.Icon.TextColor3 = Theme.subtext
+        end
+    end
+    for name, container in pairs(CardsByTab) do
+        container.Visible = name == tabName
+    end
+end
+
+local function createSidebarButton(sidebar, tabName)
+    local button = Instance.new("TextButton")
+    button.Name = tabName .. "Button"
+    button.BackgroundColor3 = tabName == State.activeTab and Theme.accent or Theme.sidebar
+    button.BorderSizePixel = 0
+    button.Size = UDim2.new(1, 0, 0, 48)
+    button.Text = ""
+    button.AutoButtonColor = false
+    button.ZIndex = PANEL_ZINDEX
+    addCorner(button, 14)
+    addStroke(button, 1)
+    button.Parent = sidebar
+
+    local label = createLabel(button, tabName, 18, Enum.Font.GothamBold)
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.Position = UDim2.new(0, 12, 0, 0)
+    label.TextColor3 = tabName == State.activeTab and Theme.text or Theme.subtext
+    label.Name = "Icon"
+    button.Icon = label
+
+    button.MouseButton1Click:Connect(function()
+        setActiveTab(tabName)
+    end)
+
+    TabButtons[tabName] = button
+end
+
+local function buildTabs(content)
+    for _, tabName in ipairs(TAB_NAMES) do
+        local container = Instance.new("Frame")
+        container.Name = tabName .. "Tab"
+        container.BackgroundTransparency = 1
+        container.Size = UDim2.new(1, 0, 0, 0)
+        container.AutomaticSize = Enum.AutomaticSize.Y
+        container.Visible = tabName == State.activeTab
+        container.Parent = content
+
+        local layout = Instance.new("UIListLayout")
+        layout.Parent = container
+        layout.FillDirection = Enum.FillDirection.Vertical
+        layout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+        layout.VerticalAlignment = Enum.VerticalAlignment.Top
+        layout.SortOrder = Enum.SortOrder.LayoutOrder
+        layout.Padding = UDim.new(0, 12)
+
+        CardsByTab[tabName] = container
+    end
+end
+
+local function buildPanel()
+    local playerGui = ensurePlayerGui()
+    if not playerGui then
+        return
+    end
+
+    ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "MobileAdminPanel"
+    ScreenGui.ResetOnSpawn = false
+    ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    ScreenGui.Parent = playerGui
+
+    FloatingButton = createFloatingButton(ScreenGui)
+    FloatingButton.Parent = ScreenGui
+    FloatingButton.ZIndex = PANEL_ZINDEX
+
+    Scrim = createScrim(ScreenGui)
+    Scrim.Parent = ScreenGui
+
+    Panel = createPanel(ScreenGui)
+    Sidebar = createSidebar(Panel)
+    local contentHolder
+    contentHolder, ContentFrame = createContent(Panel)
+    buildTabs(ContentFrame)
+
+    for _, tab in ipairs(TAB_NAMES) do
+        createSidebarButton(Sidebar, tab)
+    end
+
+    Scrim.MouseButton1Click:Connect(function()
+        if Panel.Visible then
+            tween(Scrim, {BackgroundTransparency = 1}, TweenInfo.new(0.2))
+            tween(Panel, {Position = UDim2.new(0.5, 0, PANEL_TOP - 1, 0)}, TweenInfo.new(0.25))
+            task.delay(0.25, function()
+                Panel.Visible = false
+                Scrim.Visible = false
+                FloatingButton.Visible = true
+            end)
+        end
+    end)
+
+    FloatingButton.MouseButton1Click:Connect(function()
+        FloatingButton.Visible = false
+        Scrim.Visible = true
+        Panel.Visible = true
+        Panel.Position = UDim2.new(0.5, 0, PANEL_TOP - 1, 0)
+        Scrim.BackgroundTransparency = 1
+        tween(Scrim, {BackgroundTransparency = 0.25}, TweenInfo.new(0.2))
+        tween(Panel, {Position = UDim2.new(0.5, 0, PANEL_TOP, 0)}, TweenInfo.new(0.25))
     end)
 end
 
--------------------- Panel (alto) --------------------
-local sheet = Instance.new("Frame", Root)
-sheet.Visible = false
-sheet.Size = UDim2.new(1, 0, SHEET_HEIGHT, 0)
-sheet.Position = UDim2.new(0, 0, 1, 0)
-sheet.BackgroundColor3 = Theme.sheet
-sheet.BorderSizePixel = 0
-round(sheet, 18)
-stroke(sheet, 1)
-sheet.ZIndex = 20
-sheet.Active = true
+-------------------- Fly Controls --------------------
+local function createFlyButtons(parent)
+    local container = Instance.new("Frame")
+    container.Name = "FlyButtons"
+    container.Size = UDim2.new(0, 120, 0, 150)
+    container.Position = UDim2.new(1, -130, 1, -160)
+    container.BackgroundTransparency = 1
+    container.Visible = false
+    container.Parent = parent
 
-local dim = Instance.new("Frame", Root)
-dim.BackgroundColor3 = Color3.new(0, 0, 0)
-dim.BackgroundTransparency = 1
-dim.Size = UDim2.new(1, 0, 1, 0)
-dim.Visible = false
-dim.ZIndex = 10
-dim.Active = true
+    local layout = Instance.new("UIListLayout")
+    layout.Parent = container
+    layout.FillDirection = Enum.FillDirection.Vertical
+    layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    layout.VerticalAlignment = Enum.VerticalAlignment.Center
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Padding = UDim.new(0, 12)
 
--- Contenedor interior: izquierda (nav) + derecha (contenido)
-local inner = Instance.new("Frame", sheet)
-inner.BackgroundTransparency = 1
-inner.Size = UDim2.new(1, 0, 1, 0)
-inner.Position = UDim2.new(0, 0, 0, 0)
+    local ascend = Instance.new("TextButton")
+    ascend.Name = "AscendButton"
+    ascend.Size = UDim2.new(0, 100, 0, 50)
+    ascend.BackgroundColor3 = Theme.accent
+    ascend.BorderSizePixel = 0
+    ascend.TextColor3 = Theme.text
+    ascend.Font = Enum.Font.GothamBold
+    ascend.TextSize = 24
+    ascend.Text = "↑"
+    addCorner(ascend, 12)
+    addStroke(ascend, 1)
+    ascend.Parent = container
 
--- Left sidebar
-local left = Instance.new("Frame", inner)
-left.Size = UDim2.new(0, 150, 1, 0)
-left.Position = UDim2.new(0, 0, 0, 0)
-left.BackgroundColor3 = Theme.left
-left.BorderSizePixel = 0
-round(left, 18)
-stroke(left, 1)
+    local descend = Instance.new("TextButton")
+    descend.Name = "DescendButton"
+    descend.Size = UDim2.new(0, 100, 0, 50)
+    descend.BackgroundColor3 = Theme.accent
+    descend.BorderSizePixel = 0
+    descend.TextColor3 = Theme.text
+    descend.Font = Enum.Font.GothamBold
+    descend.TextSize = 24
+    descend.Text = "↓"
+    addCorner(descend, 12)
+    addStroke(descend, 1)
+    descend.Parent = container
 
-local leftTitle = Instance.new("TextLabel", left)
-leftTitle.BackgroundTransparency = 1
-leftTitle.Size = UDim2.new(1, 0, 0, 48)
-leftTitle.Position = UDim2.new(0, 0, 0, 0)
-leftTitle.Text = "Admin Panel"
-leftTitle.Font = Enum.Font.GothamBlack
-leftTitle.TextSize = 16
-leftTitle.TextColor3 = Theme.text
+    ascend.MouseButton1Down:Connect(function()
+        State.flyAscend = 1
+    end)
+    ascend.MouseButton1Up:Connect(function()
+        State.flyAscend = 0
+    end)
+    ascend.MouseLeave:Connect(function()
+        if State.flyAscend == 1 then
+            State.flyAscend = 0
+        end
+    end)
 
-local navList = Instance.new("UIListLayout", left)
-navList.Padding = UDim.new(0, 8)
-navList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    descend.MouseButton1Down:Connect(function()
+        State.flyAscend = -1
+    end)
+    descend.MouseButton1Up:Connect(function()
+        State.flyAscend = 0
+    end)
+    descend.MouseLeave:Connect(function()
+        if State.flyAscend == -1 then
+            State.flyAscend = 0
+        end
+    end)
 
-local function makeNavBtn(text)
-    local b = Instance.new("TextButton")
-    b.Size = UDim2.new(1, -20, 0, 36)
-    b.Text = text
-    b.Font = Enum.Font.GothamBold
-    b.TextSize = 14
-    b.TextColor3 = Theme.text
-    b.BackgroundColor3 = Theme.card
-    b.BorderSizePixel = 0
-    round(b, 8)
-    stroke(b, 1)
-    b.Parent = left
-    return b
+    State.ascendButton = ascend
+    State.descendButton = descend
+    State.flyButtonContainer = container
 end
 
--- Right content
-local right = Instance.new("ScrollingFrame", inner)
-right.Position = UDim2.new(0, 160, 0, 0)
-right.Size = UDim2.new(1, -170, 1, 0)
-right.CanvasSize = UDim2.new(0, 0, 0, 0)
-right.AutomaticCanvasSize = Enum.AutomaticSize.Y
-right.ScrollBarThickness = 6
-right.BackgroundTransparency = 1
-right.Active = true
-
-local rightList = Instance.new("UIListLayout", right)
-rightList.Padding = UDim.new(0, 10)
-rightList.HorizontalAlignment = Enum.HorizontalAlignment.Left
-
--------------------- Secciones --------------------
-local Sections = {}
-local function showSection(name)
-    for n, frame in pairs(Sections) do
-        frame.Visible = (n == name)
+-------------------- Permission & Character Tracking --------------------
+local function onCharacterAdded(character)
+    State.currentCharacter = character
+    local humanoid = character:WaitForChild("Humanoid", 10)
+    State.currentHumanoid = humanoid
+    clearNoclipTracking()
+    if State.noclip and hasPermission() and isPlayerOwnedPlace() then
+        local function applyNoclipToParts(part)
+            if part:IsA("BasePart") and part.CanCollide then
+                noclipOriginalCollide[part] = part.CanCollide
+                part.CanCollide = false
+            end
+        end
+        for _, part in ipairs(character:GetDescendants()) do
+            applyNoclipToParts(part)
+        end
+    end
+    if State.walkspeedEnabled and State.walkspeedValue then
+        if humanoid then
+            humanoid.WalkSpeed = State.walkspeedValue
+        end
+    end
+    if State.fly then
+        -- Delay to ensure attachments are created after character is ready
+        task.defer(function()
+            State.fly = false
+            State.flyAscend = 0
+            if State.flyButtonContainer then
+                State.flyButtonContainer.Visible = true
+            end
+            -- Re-enable to create attachments for new character
+            State.fly = true
+        end)
     end
 end
-local function createSection(name)
-    local frame = Instance.new("Frame", right)
-    frame.BackgroundTransparency = 1
-    frame.Size = UDim2.new(1, -10, 0, 0)
-    frame.AutomaticSize = Enum.AutomaticSize.Y
-    Sections[name] = frame
-    return frame
+
+local function onCharacterRemoving()
+    clearNoclipTracking()
+    State.currentCharacter = nil
+    State.currentHumanoid = nil
 end
 
-local btnMain     = makeNavBtn("Main")
-local btnTeleport = makeNavBtn("Teleport")
-local btnVisuals  = makeNavBtn("Visuals")
-local btnInfo     = makeNavBtn("Info")
-
--------------------- FEATURES --------------------
--- WalkSpeed (fuerza constante mientras ON)
-local walkConn
-local function ensureWalk()
-    if walkConn then
-        walkConn:Disconnect()
-        walkConn = nil
+local function getHumanoid()
+    local character = LocalPlayer.Character or State.currentCharacter
+    if not character then
+        return nil
     end
-    if S.walkspeed then
-        walkConn = RunService.RenderStepped:Connect(function()
-            local char = LP.Character
-            local hum = char and char:FindFirstChildOfClass("Humanoid")
-            if hum then
-                hum.WalkSpeed = S.speed
+    return character:FindFirstChildOfClass("Humanoid")
+end
+
+-------------------- Walkspeed Logic --------------------
+local walkspeedConnection
+
+local function enableWalkspeed()
+    local humanoid = getHumanoid()
+    if humanoid then
+        humanoid.WalkSpeed = State.walkspeedValue
+        if walkspeedConnection then
+            walkspeedConnection:Disconnect()
+            walkspeedConnection = nil
+        end
+        walkspeedConnection = humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
+            if State.walkspeedEnabled then
+                humanoid.WalkSpeed = State.walkspeedValue
             end
         end)
-    else
-        local char = LP.Character
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
-        if hum then
-            hum.WalkSpeed = 16
+    end
+end
+
+local function disableWalkspeed()
+    if walkspeedConnection then
+        walkspeedConnection:Disconnect()
+        walkspeedConnection = nil
+    end
+    local character = LocalPlayer.Character
+    if character then
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid.WalkSpeed = 16
         end
     end
 end
 
--- Fly
-local flyGyro, flyVel, flyConn
-_G.__Ascend = false
-_G.__Descend = false
-local ascendBtn, descendBtn
+-------------------- Fly Logic --------------------
+local function stopFly(keepState)
+    if State.flyConnection then
+        State.flyConnection:Disconnect()
+        State.flyConnection = nil
+    end
+    if State.flyForce then
+        State.flyForce:Destroy()
+        State.flyForce = nil
+    end
+    if State.flyAlign then
+        State.flyAlign:Destroy()
+        State.flyAlign = nil
+    end
+    if State.flyAttachment then
+        State.flyAttachment:Destroy()
+        State.flyAttachment = nil
+    end
+    if State.flyButtonContainer then
+        State.flyButtonContainer.Visible = false
+    end
+    if not keepState then
+        State.fly = false
+    end
+    State.flyAscend = 0
+end
+
 local function startFly()
-    local char = LP.Character
-    if not char then
+    local character = LocalPlayer.Character
+    if not character then
         return
     end
-    local root = char:FindFirstChild("HumanoidRootPart")
-    if not root then
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    local root = character:FindFirstChild("HumanoidRootPart")
+    if not humanoid or not root then
         return
     end
-    flyGyro = Instance.new("BodyGyro", root)
-    flyGyro.P = 9e4
-    flyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
-    flyVel = Instance.new("BodyVelocity", root)
-    flyVel.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-    flyVel.P = 9e4
-    flyConn = RunService.RenderStepped:Connect(function()
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        local dir = Vector3.new()
-        if hum then
-            local mv = hum.MoveDirection
-            if mv.Magnitude > 0 then
-                dir += mv
-            end
-        end
-        if _G.__Ascend then
-            dir += Vector3.new(0, 1, 0)
-        end
-        if _G.__Descend then
-            dir += Vector3.new(0, -1, 0)
-        end
-        if dir.Magnitude > 0 then
-            dir = dir.Unit
-        end
-        flyVel.Velocity = dir * 50
-        flyGyro.CFrame = Workspace.CurrentCamera.CFrame
-    end)
-end
-local function stopFly()
-    if flyConn then
-        flyConn:Disconnect()
-        flyConn = nil
-    end
-    if flyGyro then
-        flyGyro:Destroy()
-        flyGyro = nil
-    end
-    if flyVel then
-        flyVel:Destroy()
-        flyVel = nil
-    end
-end
 
--- GodMode
-local godConn, originalMaxHealth
-local function applyGod()
-    local char = LP.Character
-    if not char then
-        return
-    end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum then
-        return
-    end
-    originalMaxHealth = originalMaxHealth or hum.MaxHealth
-    hum.MaxHealth = math.huge
-    hum.Health = hum.MaxHealth
-    if godConn then
-        godConn:Disconnect()
-    end
-    godConn = hum.HealthChanged:Connect(function()
-        if hum.Health < hum.MaxHealth then
-            hum.Health = hum.MaxHealth
-        end
-    end)
-end
-local function removeGod()
-    local char = LP.Character
-    if not char then
-        return
-    end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum then
-        return
-    end
-    if godConn then
-        godConn:Disconnect()
-        godConn = nil
-    end
-    if originalMaxHealth then
-        hum.MaxHealth = originalMaxHealth
-    end
-    hum.Health = hum.MaxHealth
-end
+    local attachment = Instance.new("Attachment")
+    attachment.Name = "FlyAttachment"
+    attachment.Parent = root
 
--- Noclip (wallhack)
-local noclipConn
-local savedCollide = {}
-local function setCharCollision(char, collide)
-    for _, obj in ipairs(char:GetDescendants()) do
-        if obj:IsA("BasePart") then
-            savedCollide[obj] = savedCollide[obj] == nil and obj.CanCollide or savedCollide[obj]
-            obj.CanCollide = not collide and savedCollide[obj] or false
-        end
+    local align = Instance.new("AlignOrientation")
+    align.Attachment0 = attachment
+    align.Mode = Enum.OrientationAlignmentMode.OneAttachment
+    align.Responsiveness = 50
+    align.MaxTorque = math.huge
+    align.Parent = root
+
+    local force = Instance.new("VectorForce")
+    force.ApplyAtCenterOfMass = true
+    force.Attachment0 = attachment
+    force.RelativeTo = Enum.ActuatorRelativeTo.World
+    force.Force = Vector3.zero
+    force.Parent = root
+
+    State.flyAttachment = attachment
+    State.flyAlign = align
+    State.flyForce = force
+    State.fly = true
+
+    if State.flyButtonContainer then
+        State.flyButtonContainer.Visible = true
     end
-end
-local function enableNoclip()
-    local char = LP.Character
-    if not char then
-        return
-    end
-    savedCollide = {}
-    setCharCollision(char, true)
-    noclipConn = RunService.Stepped:Connect(function()
-        local c = LP.Character
-        if not c then
+
+    State.flyConnection = RunService.Heartbeat:Connect(function()
+        local currentCharacter = LocalPlayer.Character
+        if not State.fly or not currentCharacter then
             return
         end
-        for _, obj in ipairs(c:GetDescendants()) do
-            if obj:IsA("BasePart") then
-                obj.CanCollide = false
-            end
+        local currentHumanoid = currentCharacter:FindFirstChildOfClass("Humanoid")
+        local currentRoot = currentCharacter:FindFirstChild("HumanoidRootPart")
+        if not currentHumanoid or not currentRoot then
+            return
         end
+
+        currentHumanoid:ChangeState(Enum.HumanoidStateType.Physics)
+
+        local camera = Workspace.CurrentCamera
+        local direction = Vector3.new()
+        if camera then
+            local moveDir = currentHumanoid.MoveDirection
+            local lookVector = camera.CFrame.LookVector
+            local rightVector = camera.CFrame.RightVector
+            local forward = Vector3.new(lookVector.X, 0, lookVector.Z).Unit
+            if forward.Magnitude < 1e-3 then
+                forward = Vector3.new(0, 0, -1)
+            end
+            local right = Vector3.new(rightVector.X, 0, rightVector.Z).Unit
+            if right.Magnitude < 1e-3 then
+                right = Vector3.new(1, 0, 0)
+            end
+
+            local projected = forward * moveDir.Z + right * moveDir.X
+            direction = projected.Unit * (projected.Magnitude > 0 and projected.Magnitude or 0)
+        end
+
+        local ascend = State.flyAscend
+        local finalVelocity = (direction * State.walkspeedValue) + Vector3.new(0, ascend * State.walkspeedValue, 0)
+        local requiredForce = finalVelocity * currentRoot.AssemblyMass
+        force.Force = requiredForce
+        align.CFrame = camera and camera.CFrame or currentRoot.CFrame
     end)
 end
-local function disableNoclip()
-    if noclipConn then
-        noclipConn:Disconnect()
-        noclipConn = nil
+
+-------------------- Noclip Logic --------------------
+local function startNoclip()
+    if State.noclipConnection then
+        State.noclipConnection:Disconnect()
+        State.noclipConnection = nil
     end
-    for part, prev in pairs(savedCollide) do
+    local function applyNoclip(character)
+        if not character then
+            return
+        end
+        for _, part in ipairs(character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                if noclipOriginalCollide[part] == nil then
+                    noclipOriginalCollide[part] = part.CanCollide
+                end
+                part.CanCollide = false
+            end
+        end
+    end
+
+    State.noclipConnection = RunService.Heartbeat:Connect(function()
+        local character = LocalPlayer.Character
+        if character then
+            applyNoclip(character)
+        end
+    end)
+
+    local character = LocalPlayer.Character
+    if character then
+        applyNoclip(character)
+    end
+end
+
+local function stopNoclip()
+    if State.noclipConnection then
+        State.noclipConnection:Disconnect()
+        State.noclipConnection = nil
+    end
+    for part, originalValue in pairs(noclipOriginalCollide) do
         if part and part.Parent then
-            part.CanCollide = prev
+            part.CanCollide = originalValue
         end
+        noclipOriginalCollide[part] = nil
     end
-    savedCollide = {}
 end
 
--- ESP (respetando S.visuals)
-local ESPFolders, ESPConns = {}, {}
-local pAddConn, pRemConn
-local function clearESP(plr)
-    if ESPConns[plr] then
-        ESPConns[plr]:Disconnect()
-        ESPConns[plr] = nil
-    end
-    if ESPFolders[plr] then
-        ESPFolders[plr]:Destroy()
-        ESPFolders[plr] = nil
-    end
-end
-local function createESP(plr)
-    if not (S.visuals and S.esp) or plr == LP or ESPFolders[plr] then
+-------------------- Teleport Logic --------------------
+local function teleportToTarget(target)
+    if not hasPermission() then
+        showToast("Admin Panel", "No permission")
         return
     end
-    local folder = Instance.new("Folder", ESPGui)
-    folder.Name = "ESP_" .. plr.Name
-    ESPFolders[plr] = folder
-    ESPConns[plr] = RunService.Heartbeat:Connect(function()
-        if not (S.visuals and S.esp) then
-            return
-        end
-        local char = plr.Character
-        if not char or not char.Parent then
-            for _, c in ipairs(folder:GetChildren()) do
-                c:Destroy()
-            end
-            return
-        end
-        local root = char:FindFirstChild("HumanoidRootPart")
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        if not root or not hum or hum.Health <= 0 then
-            for _, c in ipairs(folder:GetChildren()) do
-                c:Destroy()
-            end
-            return
-        end
-        pcall(function()
-            hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
-        end)
-        for _, c in ipairs(folder:GetChildren()) do
-            c:Destroy()
-        end
-        local hl = Instance.new("Highlight", folder)
-        hl.Adornee = char
-        hl.FillColor = Color3.fromRGB(255, 0, 0)
-        hl.FillTransparency = 0.85
-        hl.OutlineColor = Color3.fromRGB(255, 0, 0)
-        hl.OutlineTransparency = 0
-        local bb = Instance.new("BillboardGui", folder)
-        bb.Adornee = root
-        bb.Size = UDim2.new(0, 240, 0, 50)
-        bb.AlwaysOnTop = true
-        bb.MaxDistance = 2000
-        bb.StudsOffset = Vector3.new(0, 4, 0)
-        local lbl = Instance.new("TextLabel", bb)
-        lbl.Size = UDim2.new(1, 0, 1, 0)
-        lbl.BackgroundTransparency = 1
-        lbl.Font = Enum.Font.GothamBlack
-        lbl.TextColor3 = Theme.text
-        lbl.TextStrokeTransparency = 0
-        lbl.TextStrokeColor3 = Color3.fromRGB(10, 10, 10)
-        lbl.TextSize = S.espSize
-        lbl.Text = ("%s [%d HP]"):format(plr.Name, math.floor(hum.Health))
-    end)
-end
-local function toggleESP(on)
-    if not on then
-        for plr in pairs(ESPFolders) do
-            clearESP(plr)
-        end
+    if not State.teleportRemoteAvailable or not Remotes.teleport then
+        showToast("Admin Panel", "Teleport remote missing")
         return
     end
-    for _, p in ipairs(Players:GetPlayers()) do
-        createESP(p)
+    if target and target:IsA("BasePart") then
+        Remotes.teleport:FireServer(target.CFrame)
     end
 end
 
--------------------- UI: MAIN --------------------
-local secMain = createSection("Main")
-do
-    local c1 = makeCard(secMain, "WalkSpeed", "Velocidad del personaje")
-    local sw1, _ = makeSwitch(S.walkspeed, function(v)
-        S.walkspeed = v
-        ensureWalk()
-    end)
-    sw1.AnchorPoint = Vector2.new(1, 0.5)
-    sw1.Position = UDim2.new(1, -12, 0, 20)
-    sw1.Parent = c1
-    local s1 = makeSlider(500, 10, S.speed, function(v)
-        S.speed = v
-        if S.walkspeed then
-            ensureWalk()
+-------------------- God Mode Logic --------------------
+local function setGodMode(enabled)
+    if not State.godRemoteAvailable or not Remotes.godMode then
+        showToast("Admin Panel", "Server-side only")
+        return
+    end
+    State.godModeEnabled = enabled
+    Remotes.godMode:FireServer(enabled)
+end
+
+-------------------- UI Population --------------------
+local function populateMainTab()
+    local container = CardsByTab.Main
+    if not container then
+        return
+    end
+
+    -- WalkSpeed Card
+    local walkspeedCard = makeCard("WalkSpeed", "Adjust your walking speed")
+    walkspeedCard.Parent = container
+
+    local switchRow = Instance.new("Frame")
+    switchRow.BackgroundTransparency = 1
+    switchRow.Size = UDim2.new(1, 0, 0, 40)
+    switchRow.Parent = walkspeedCard
+
+    local switchLabel = createLabel(switchRow, "Enabled", 16, Enum.Font.GothamBold)
+    switchLabel.Size = UDim2.new(0.6, 0, 1, 0)
+
+    local walkSwitch, setWalkSwitch = makeSwitch(false, function(value)
+        if not hasPermission() then
+            setWalkSwitch(false)
+            showToast("Admin Panel", "No permission")
+            return
+        end
+        State.walkspeedEnabled = value
+        if value then
+            enableWalkspeed()
+        else
+            disableWalkspeed()
         end
     end)
-    s1.Position = UDim2.new(0, 12, 0, 40)
-    s1.Parent = c1
+    walkSwitch.AnchorPoint = Vector2.new(1, 0.5)
+    walkSwitch.Position = UDim2.new(1, 0, 0.5, 0)
+    walkSwitch.Parent = switchRow
+    State.switchSetters.walkspeed = setWalkSwitch
 
-    local c2 = makeCard(secMain, "Fly", "Botones ↑/↓ en pantalla")
-    local sw2, _ = makeSwitch(S.fly, function(v)
-        S.fly = v
-        if v then
+    local sliderRow = Instance.new("Frame")
+    sliderRow.BackgroundTransparency = 1
+    sliderRow.Size = UDim2.new(1, 0, 0, 40)
+    sliderRow.Parent = walkspeedCard
+
+    local sliderLabel = createLabel(sliderRow, "Speed", 16, Enum.Font.GothamBold)
+    sliderLabel.Size = UDim2.new(1, 0, 0, 20)
+
+    local walkSlider, setWalkSlider = makeSlider(200, 1, 16, function(value)
+        State.walkspeedValue = math.clamp(value, 16, 200)
+        if State.walkspeedEnabled then
+            enableWalkspeed()
+        end
+    end)
+    walkSlider.Parent = walkspeedCard
+    walkSlider:SetAttribute("MinValue", 16)
+    State.walkspeedValue = 16
+    State.sliderSetters = State.sliderSetters or {}
+    State.sliderSetters.walkspeed = setWalkSlider
+
+    -- Fly Card
+    local flyCard = makeCard("Fly", "Client-side flight controls")
+    flyCard.Parent = container
+
+    local flyRow = Instance.new("Frame")
+    flyRow.BackgroundTransparency = 1
+    flyRow.Size = UDim2.new(1, 0, 0, 40)
+    flyRow.Parent = flyCard
+
+    local flyLabel = createLabel(flyRow, "Enabled", 16, Enum.Font.GothamBold)
+    flyLabel.Size = UDim2.new(0.6, 0, 1, 0)
+
+    local flySwitch, setFlySwitch = makeSwitch(false, function(value)
+        if not hasPermission() then
+            setFlySwitch(false)
+            showToast("Admin Panel", "No permission")
+            return
+        end
+        if value then
             startFly()
         else
             stopFly()
         end
-        _G.__Ascend = false
-        _G.__Descend = false
-        if ascendBtn then
-            ascendBtn.Visible = v and not sheet.Visible
-        end
-        if descendBtn then
-            descendBtn.Visible = v and not sheet.Visible
-        end
+        State.fly = value
     end)
-    sw2.AnchorPoint = Vector2.new(1, 0.5)
-    sw2.Position = UDim2.new(1, -12, 0, 20)
-    sw2.Parent = c2
+    flySwitch.AnchorPoint = Vector2.new(1, 0.5)
+    flySwitch.Position = UDim2.new(1, 0, 0.5, 0)
+    flySwitch.Parent = flyRow
+    State.switchSetters.fly = setFlySwitch
 
-    local c3 = makeCard(secMain, "Noclip (Wallhack)", "Atraviesa paredes/estructuras")
-    local sw3, _ = makeSwitch(S.noclip, function(v)
-        S.noclip = v
-        if v then
-            enableNoclip()
-        else
-            disableNoclip()
-        end
-    end)
-    sw3.AnchorPoint = Vector2.new(1, 0.5)
-    sw3.Position = UDim2.new(1, -12, 0, 20)
-    sw3.Parent = c3
+    -- Noclip Card
+    local noclipCard = makeCard("Noclip", "Disable collisions for your character")
+    noclipCard.Parent = container
 
-    local c4 = makeCard(secMain, "GodMode", "Mantiene la salud al máximo")
-    local sw4, _ = makeSwitch(S.god, function(v)
-        S.god = v
-        if v then
-            applyGod()
-        else
-            removeGod()
-        end
-    end)
-    sw4.AnchorPoint = Vector2.new(1, 0.5)
-    sw4.Position = UDim2.new(1, -12, 0, 20)
-    sw4.Parent = c4
-end
+    local noclipRow = Instance.new("Frame")
+    noclipRow.BackgroundTransparency = 1
+    noclipRow.Size = UDim2.new(1, 0, 0, 40)
+    noclipRow.Parent = noclipCard
 
--------------------- UI: TELEPORT --------------------
-local secTP = createSection("Teleport")
-do
-    local c = makeCard(secTP, "Jugadores", "Toca un nombre y pulsa TP")
-    c.Size = UDim2.new(1, 0, 0, 230)
-    local list = Instance.new("ScrollingFrame", c)
-    list.Position = UDim2.new(0, 12, 0, 40)
-    list.Size = UDim2.new(1, -24, 1, -90)
-    list.BackgroundColor3 = Theme.bg
-    list.BorderSizePixel = 0
-    round(list, 8)
-    stroke(list, 1)
-    list.CanvasSize = UDim2.new(0, 0, 0, 0)
-    list.AutomaticCanvasSize = Enum.AutomaticSize.Y
-    list.ScrollBarThickness = 4
-    local ll = Instance.new("UIListLayout", list)
-    ll.Padding = UDim.new(0, 6)
-    local selected
+    local noclipLabel = createLabel(noclipRow, "Enabled", 16, Enum.Font.GothamBold)
+    noclipLabel.Size = UDim2.new(0.6, 0, 1, 0)
 
-    local function refresh()
-        for _, ch in ipairs(list:GetChildren()) do
-            if ch:IsA("TextButton") then
-                ch:Destroy()
-            end
-        end
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= LP then
-                local b = Instance.new("TextButton", list)
-                b.Size = UDim2.new(1, -8, 0, 30)
-                b.Text = p.Name
-                b.Font = Enum.Font.Gotham
-                b.TextSize = 14
-                b.TextColor3 = Theme.text
-                b.BackgroundColor3 = Theme.card
-                b.BorderSizePixel = 0
-                round(b, 8)
-                stroke(b, 1)
-                b.MouseButton1Click:Connect(function()
-                    selected = p
-                    for _, o in ipairs(list:GetChildren()) do
-                        if o:IsA("TextButton") then
-                            o.BackgroundColor3 = Theme.card
-                        end
-                    end
-                    b.BackgroundColor3 = Theme.accentDim
-                end)
-            end
-        end
-    end
-
-    local row = Instance.new("Frame", c)
-    row.BackgroundTransparency = 1
-    row.Position = UDim2.new(0, 12, 1, -44)
-    row.Size = UDim2.new(1, -24, 0, 32)
-    local upd = Instance.new("TextButton", row)
-    upd.Size = UDim2.new(0.48, 0, 1, 0)
-    upd.Text = "Actualizar"
-    upd.Font = Enum.Font.GothamBold
-    upd.TextSize = 14
-    upd.TextColor3 = Theme.text
-    upd.BackgroundColor3 = Theme.accent
-    upd.BorderSizePixel = 0
-    round(upd, 8)
-    local tp = Instance.new("TextButton", row)
-    tp.AnchorPoint = Vector2.new(1, 0)
-    tp.Position = UDim2.new(1, 0, 0, 0)
-    tp.Size = UDim2.new(0.48, 0, 1, 0)
-    tp.Text = "TP"
-    tp.Font = Enum.Font.GothamBold
-    tp.TextSize = 14
-    tp.TextColor3 = Theme.text
-    tp.BackgroundColor3 = Theme.accentDim
-    tp.BorderSizePixel = 0
-    round(tp, 8)
-
-    upd.MouseButton1Click:Connect(refresh)
-    tp.MouseButton1Click:Connect(function()
-        if not selected then
+    local noclipSwitch, setNoclipSwitch = makeSwitch(false, function(value)
+        if not hasPermission() or not isPlayerOwnedPlace() then
+            setNoclipSwitch(false)
+            showToast("Admin Panel", "No permission")
             return
         end
-        local me = LP.Character
-        local tar = selected.Character
-        if me and tar then
-            local myR = me:FindFirstChild("HumanoidRootPart")
-            local tR = tar:FindFirstChild("HumanoidRootPart")
-            if myR and tR then
-                myR.CFrame = tR.CFrame * CFrame.new(0, 3, 0)
-            end
-        end
-    end)
-    refresh()
-end
-
--------------------- UI: VISUALS --------------------
-local secVis = createSection("Visuals")
-do
-    local c0 = makeCard(secVis, "Visuals Enabled", "Activa/Desactiva todos los visuales")
-    local sw0, _ = makeSwitch(S.visuals, function(v)
-        S.visuals = v
-        toggleESP(v and S.esp)
-    end)
-    sw0.AnchorPoint = Vector2.new(1, 0.5)
-    sw0.Position = UDim2.new(1, -12, 0, 20)
-    sw0.Parent = c0
-
-    local c1 = makeCard(secVis, "ESP", "Highlight rojo + nombres AlwaysOnTop")
-    local sw1, _ = makeSwitch(S.esp, function(v)
-        S.esp = v
-        if S.visuals then
-            toggleESP(v)
+        State.noclip = value
+        if value then
+            startNoclip()
         else
-            toggleESP(false)
+            stopNoclip()
         end
     end)
-    sw1.AnchorPoint = Vector2.new(1, 0.5)
-    sw1.Position = UDim2.new(1, -12, 0, 20)
-    sw1.Parent = c1
+    noclipSwitch.AnchorPoint = Vector2.new(1, 0.5)
+    noclipSwitch.Position = UDim2.new(1, 0, 0.5, 0)
+    noclipSwitch.Parent = noclipRow
+    State.switchSetters.noclip = setNoclipSwitch
 
-    local c2 = makeCard(secVis, "Tamaño de nombre", "10–50")
-    local s2 = makeSlider(50, 2, S.espSize, function(v)
-        S.espSize = v
+    -- God Mode Card
+    local godCard = makeCard("God Mode", "Requires server support")
+    godCard.Parent = container
+
+    local godRow = Instance.new("Frame")
+    godRow.BackgroundTransparency = 1
+    godRow.Size = UDim2.new(1, 0, 0, 40)
+    godRow.Parent = godCard
+
+    local godLabel = createLabel(godRow, "Enabled", 16, Enum.Font.GothamBold)
+    godLabel.Size = UDim2.new(0.6, 0, 1, 0)
+
+    local godSwitch, setGodSwitch = makeSwitch(false, function(value)
+        if not hasPermission() then
+            setGodSwitch(false)
+            showToast("Admin Panel", "No permission")
+            return
+        end
+        if not State.godRemoteAvailable then
+            setGodSwitch(false)
+            showToast("Admin Panel", "Server-side only")
+            return
+        end
+        setGodMode(value)
     end)
-    s2.Position = UDim2.new(0, 12, 0, 38)
-    s2.Parent = c2
+    godSwitch.AnchorPoint = Vector2.new(1, 0.5)
+    godSwitch.Position = UDim2.new(1, 0, 0.5, 0)
+    godSwitch.Parent = godRow
+    godSwitch.Active = State.godRemoteAvailable
+    godSwitch.Visible = true
+    State.switchSetters.god = setGodSwitch
+
+    if not State.godRemoteAvailable then
+        setGodSwitch(false)
+    end
 end
 
--------------------- UI: INFO --------------------
-local secInfo = createSection("Info")
-do
-    makeCard(secInfo, "Tema", "Rojo/Negro. Sidebar + panel derecho, móvil.")
+local function populateTeleportTab()
+    local container = CardsByTab.Teleport
+    if not container then
+        return
+    end
+
+    local teleportCard = makeCard("Teleport Points", "Jump to predefined locations")
+    teleportCard.Parent = container
+
+    if #TeleportTargets == 0 then
+        local emptyLabel = createLabel(teleportCard, "No teleport points found", 16, Enum.Font.Gotham, Theme.subtext)
+        emptyLabel.TextWrapped = true
+        emptyLabel.Size = UDim2.new(1, 0, 0, 40)
+        return
+    end
+
+    for _, part in ipairs(TeleportTargets) do
+        local button = Instance.new("TextButton")
+        button.Name = "Teleport_" .. part.Name
+        button.Text = part.Name
+        button.Font = Enum.Font.GothamBold
+        button.TextSize = 16
+        button.TextColor3 = Theme.text
+        button.BackgroundColor3 = Theme.accentDim
+        button.BorderSizePixel = 0
+        button.Size = UDim2.new(1, 0, 0, 40)
+        button.AutoButtonColor = false
+        addCorner(button, 12)
+        addStroke(button, 1)
+        button.Parent = teleportCard
+
+        button.MouseButton1Click:Connect(function()
+            teleportToTarget(part)
+        end)
+    end
 end
 
--------------------- Nav wiring --------------------
-btnMain.MouseButton1Click:Connect(function()
-    showSection("Main")
-end)
-btnTeleport.MouseButton1Click:Connect(function()
-    showSection("Teleport")
-end)
-btnVisuals.MouseButton1Click:Connect(function()
-    showSection("Visuals")
-end)
-btnInfo.MouseButton1Click:Connect(function()
-    showSection("Info")
-end)
-showSection("Main")
+local function populateVisualsTab()
+    local container = CardsByTab.Visuals
+    if not container then
+        return
+    end
 
--------------------- Botones Fly ↑/↓ --------------------
-ascendBtn = Instance.new("TextButton", Root)
-ascendBtn.Size = UDim2.new(0, 48, 0, 48)
-ascendBtn.Position = UDim2.new(0.88, 0, 0.30, 0)
-ascendBtn.Text = "↑"
-ascendBtn.TextSize = 22
-ascendBtn.Font = Enum.Font.GothamBold
-ascendBtn.TextColor3 = Theme.text
-ascendBtn.BackgroundColor3 = Theme.accent
-ascendBtn.BorderSizePixel = 0
-round(ascendBtn, 12)
-stroke(ascendBtn, 1)
-ascendBtn.Visible = false
-ascendBtn.ZIndex = 25
-ascendBtn.MouseButton1Down:Connect(function()
-    _G.__Ascend = true
-end)
-ascendBtn.MouseButton1Up:Connect(function()
-    _G.__Ascend = false
-end)
+    local masterCard = makeCard("Visuals", "Manage ESP for owned NPCs")
+    masterCard.Parent = container
 
-descendBtn = Instance.new("TextButton", Root)
-descendBtn.Size = UDim2.new(0, 48, 0, 48)
-descendBtn.Position = UDim2.new(0.88, 0, 0.42, 0)
-descendBtn.Text = "↓"
-descendBtn.TextSize = 22
-descendBtn.Font = Enum.Font.GothamBold
-descendBtn.TextColor3 = Theme.text
-descendBtn.BackgroundColor3 = Theme.accentDim
-descendBtn.BorderSizePixel = 0
-round(descendBtn, 12)
-stroke(descendBtn, 1)
-descendBtn.Visible = false
-descendBtn.ZIndex = 25
-descendBtn.MouseButton1Down:Connect(function()
-    _G.__Descend = true
-end)
-descendBtn.MouseButton1Up:Connect(function()
-    _G.__Descend = false
-end)
+    local layout = masterCard:FindFirstChildOfClass("UIListLayout")
+    layout.Padding = UDim.new(0, 10)
 
--------------------- Abrir / Cerrar --------------------
-local function openSheet()
-    sheet.Visible = true
-    dim.Visible = true
-    openBtn.Visible = false
-    ascendBtn.Visible = S.fly and false
-    descendBtn.Visible = S.fly and false
-    TweenService:Create(dim, TweenInfo.new(0.15), {BackgroundTransparency = 0.35}):Play()
-    TweenService:Create(sheet, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-        Position = UDim2.new(0, 0, SHEET_TOP, 0)
-    }):Play()
-end
-local function closeSheet()
-    TweenService:Create(dim, TweenInfo.new(0.12), {BackgroundTransparency = 1}):Play()
-    TweenService:Create(sheet, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-        Position = UDim2.new(0, 0, 1, 0)
-    }):Play()
-    task.delay(0.20, function()
-        sheet.Visible = false
-        dim.Visible = false
-        openBtn.Visible = true
-        ascendBtn.Visible = S.fly
-        descendBtn.Visible = S.fly
+    local masterRow = Instance.new("Frame")
+    masterRow.BackgroundTransparency = 1
+    masterRow.Size = UDim2.new(1, 0, 0, 32)
+    masterRow.Parent = masterCard
+
+    local masterLabel = createLabel(masterRow, "Visuals Enabled", 16, Enum.Font.GothamBold)
+    masterLabel.Size = UDim2.new(0.6, 0, 1, 0)
+
+    local masterSwitch, setMasterSwitch = makeSwitch(State.visualsEnabled, function(value)
+        setVisualsEnabled(value)
     end)
+    masterSwitch.AnchorPoint = Vector2.new(1, 0.5)
+    masterSwitch.Position = UDim2.new(1, 0, 0.5, 0)
+    masterSwitch.Parent = masterRow
+    State.switchSetters.visuals = setMasterSwitch
+
+    local espRow = Instance.new("Frame")
+    espRow.BackgroundTransparency = 1
+    espRow.Size = UDim2.new(1, 0, 0, 32)
+    espRow.Parent = masterCard
+
+    local espLabel = createLabel(espRow, "NPC ESP", 16, Enum.Font.GothamBold)
+    espLabel.Size = UDim2.new(0.6, 0, 1, 0)
+
+    local espSwitch, setEspSwitch = makeSwitch(State.espEnabled, function(value)
+        setEspEnabled(value)
+    end)
+    espSwitch.AnchorPoint = Vector2.new(1, 0.5)
+    espSwitch.Position = UDim2.new(1, 0, 0.5, 0)
+    espSwitch.Parent = espRow
+    State.switchSetters.esp = setEspSwitch
+
+    local sizeRow = Instance.new("Frame")
+    sizeRow.BackgroundTransparency = 1
+    sizeRow.Size = UDim2.new(1, 0, 0, 40)
+    sizeRow.Parent = masterCard
+
+    local sizeLabel = createLabel(sizeRow, "Name Font Size", 16, Enum.Font.GothamBold)
+    sizeLabel.Size = UDim2.new(1, 0, 0, 20)
+
+    local sizeSlider = makeSlider(50, 2, State.espFontSize, function(value)
+        setEspSize(math.clamp(value, 10, 50))
+    end)
+    sizeSlider.Parent = masterCard
+    sizeSlider:SetAttribute("MinValue", 10)
 end
-openBtn.MouseButton1Click:Connect(openSheet)
-dim.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.Touch then
-        closeSheet()
-    end
-end)
 
--------------------- Respawn reaplicar --------------------
-LP.CharacterAdded:Connect(function()
-    task.wait(0.8)
-    ensureWalk()
-    if S.god then
-        applyGod()
+local function populateInfoTab()
+    local container = CardsByTab.Info
+    if not container then
+        return
     end
-    if S.noclip then
-        enableNoclip()
-    end
-    if S.visuals and S.esp then
-        toggleESP(true)
-    end
-    if S.fly then
-        startFly()
-        ascendBtn.Visible = true
-        descendBtn.Visible = true
-    end
-end)
 
-print("✅ Admin Panel (Sidebar móvil) cargado. Ajusta SHEET_TOP/SHEET_HEIGHT si lo quieres aún más arriba.")
+    local infoCard = makeCard("Information", "Usage and credits")
+    infoCard.Size = UDim2.new(1, -12, 0, 160)
+    infoCard.Parent = container
+
+    local infoLabel = createLabel(infoCard, "This panel is for your personal Roblox experience.\nPermissions are required to modify gameplay settings.", 14, Enum.Font.Gotham)
+    infoLabel.TextWrapped = true
+    infoLabel.Size = UDim2.new(1, 0, 0, 60)
+
+    local creditsLabel = createLabel(infoCard, "Design: Red & Black Admin UI\nControls optimized for touch.", 14, Enum.Font.Gotham)
+    creditsLabel.TextWrapped = true
+    creditsLabel.Size = UDim2.new(1, 0, 0, 60)
+end
+
+-------------------- Permission Monitoring --------------------
+local function updatePermission()
+    State.canAdmin = getBoolValue(LocalPlayer, "CanAdmin") == true
+end
+
+local function monitorPermission()
+    local canAdminValue = LocalPlayer:FindFirstChild("CanAdmin")
+    if canAdminValue and canAdminValue:IsA("BoolValue") then
+        canAdminValue.Changed:Connect(function()
+            updatePermission()
+        end)
+    end
+    LocalPlayer.ChildAdded:Connect(function(child)
+        if child.Name == "CanAdmin" and child:IsA("BoolValue") then
+            updatePermission()
+            child.Changed:Connect(function()
+                updatePermission()
+            end)
+        end
+    end)
+    LocalPlayer.ChildRemoved:Connect(function(child)
+        if child.Name == "CanAdmin" then
+            updatePermission()
+        end
+    end)
+    updatePermission()
+end
+
+-------------------- Initialization --------------------
+local function initialize()
+    detectRemotes()
+    loadTeleportPoints()
+    buildPanel()
+    populateMainTab()
+    populateTeleportTab()
+    populateVisualsTab()
+    populateInfoTab()
+    setActiveTab("Main")
+    monitorPermission()
+    State.uiMounted = true
+end
+
+initialize()
+
+LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
+LocalPlayer.CharacterRemoving:Connect(onCharacterRemoving)
+if LocalPlayer.Character then
+    onCharacterAdded(LocalPlayer.Character)
+end
+
+showToast("Admin Panel", "Loaded mobile admin controls")
