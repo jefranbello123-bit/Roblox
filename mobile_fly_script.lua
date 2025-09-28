@@ -46,6 +46,8 @@ local flyBodyGyro        = nil
 local flyBodyVelocity    = nil
 local flyUpdateConnection = nil
 local flyKeys            = {W=false,S=false,A=false,D=false,Q=false,E=false}
+local flyAscend         = false
+local flyDescend        = false
 
 -- Storage for ESP data
 local espFolders         = {}      -- [player] = Folder
@@ -64,8 +66,8 @@ screenGui.Parent = CoreGui
 local mainButton = Instance.new("TextButton")
 mainButton.Size            = UDim2.new(0, 70, 0, 70)
 mainButton.Position        = UDim2.new(0.5, -35, 0.1, 0)
--- Use plain text to avoid font issues with emojis
-mainButton.Text            = "MENÃš"
+-- Use plain text without accents to avoid font issues
+mainButton.Text            = "MENU"
 mainButton.TextSize        = 30
 mainButton.Font            = Enum.Font.GothamBold
 mainButton.TextColor3      = Color3.new(1, 1, 1)
@@ -276,6 +278,44 @@ downStroke.Thickness = 2
 downStroke.Color     = Color3.fromRGB(50, 50, 50)
 downStroke.Parent    = downButton
 
+-- Ascend button for flight (â†‘)
+local ascendButton = Instance.new("TextButton")
+ascendButton.Size             = UDim2.new(0, 30, 0, 30)
+ascendButton.Position         = UDim2.new(0.75, 0, 0.88, 0)
+ascendButton.Text             = "â†‘"
+ascendButton.TextSize         = 18
+ascendButton.Font             = Enum.Font.GothamBold
+ascendButton.TextColor3       = Color3.new(1, 1, 1)
+ascendButton.BackgroundColor3 = Color3.fromRGB(60, 200, 60)
+ascendButton.BorderSizePixel  = 0
+ascendButton.Parent           = menuFrame
+local ascendCorner = Instance.new("UICorner")
+ascendCorner.CornerRadius = UDim.new(0, 8)
+ascendCorner.Parent       = ascendButton
+local ascendStroke = Instance.new("UIStroke")
+ascendStroke.Thickness = 2
+ascendStroke.Color     = Color3.fromRGB(50, 50, 50)
+ascendStroke.Parent    = ascendButton
+
+-- Descend button for flight (â†“)
+local descendButton = Instance.new("TextButton")
+descendButton.Size             = UDim2.new(0, 30, 0, 30)
+descendButton.Position         = UDim2.new(0.85, 0, 0.88, 0)
+descendButton.Text             = "â†“"
+descendButton.TextSize         = 18
+descendButton.Font             = Enum.Font.GothamBold
+descendButton.TextColor3       = Color3.new(1, 1, 1)
+descendButton.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+descendButton.BorderSizePixel  = 0
+descendButton.Parent           = menuFrame
+local descendCorner = Instance.new("UICorner")
+descendCorner.CornerRadius = UDim.new(0, 8)
+descendCorner.Parent       = descendButton
+local descendStroke = Instance.new("UIStroke")
+descendStroke.Thickness = 2
+descendStroke.Color     = Color3.fromRGB(50, 50, 50)
+descendStroke.Parent    = descendButton
+
 -- Internal flag for menu state
 local menuOpen = false
 
@@ -362,23 +402,37 @@ local function startFlying()
     flyBodyVelocity.P = 9e4
     flyBodyVelocity.Parent = root
     -- Connection to update velocity each frame
-    flyUpdateConnection = RunService.RenderStepped:Connect(function()
-        if not flyEnabled then return end
-        local cam = workspace.CurrentCamera
-        local direction = Vector3.new(0, 0, 0)
-        if flyKeys.W then direction = direction + cam.CFrame.LookVector end
-        if flyKeys.S then direction = direction - cam.CFrame.LookVector end
-        if flyKeys.A then direction = direction - cam.CFrame.RightVector end
-        if flyKeys.D then direction = direction + cam.CFrame.RightVector end
-        if flyKeys.E then direction = direction + cam.CFrame.UpVector end
-        if flyKeys.Q then direction = direction - cam.CFrame.UpVector end
-        if direction.Magnitude > 0 then
-            direction = direction.Unit
-        end
-        local speed = 50
-        flyBodyVelocity.velocity = direction * speed
-        flyBodyGyro.CFrame = cam.CFrame
-    end)
+        flyUpdateConnection = RunService.RenderStepped:Connect(function()
+            if not flyEnabled then return end
+            -- Direction based on input
+            local direction = Vector3.new(0, 0, 0)
+            local cam = workspace.CurrentCamera
+            -- Keyboard controls (desktop)
+            if flyKeys.W then direction = direction + cam.CFrame.LookVector end
+            if flyKeys.S then direction = direction - cam.CFrame.LookVector end
+            if flyKeys.A then direction = direction - cam.CFrame.RightVector end
+            if flyKeys.D then direction = direction + cam.CFrame.RightVector end
+            -- Mobile joystick controls: use Humanoid.MoveDirection
+            local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                local moveDir = humanoid.MoveDirection
+                if moveDir.Magnitude > 0 then
+                    -- MoveDirection is already in world space; add to direction
+                    direction = direction + moveDir
+                end
+            end
+            -- Vertical controls via ascend/descend buttons or keyboard keys Q/E
+            if flyKeys.E or flyAscend then direction = direction + Vector3.new(0, 1, 0) end
+            if flyKeys.Q or flyDescend then direction = direction + Vector3.new(0, -1, 0) end
+            -- Normalize if necessary
+            if direction.Magnitude > 0 then
+                direction = direction.Unit
+            end
+            -- Apply velocity and orient with camera
+            local speed = 50
+            flyBodyVelocity.velocity = direction * speed
+            flyBodyGyro.CFrame = cam.CFrame
+        end)
 end
 
 -- Stops flight by cleaning up body movers and disconnecting the update loop.
@@ -615,6 +669,20 @@ end)
 espButton.MouseButton1Click:Connect(toggleESP)
 walkButton.MouseButton1Click:Connect(toggleWalkhack)
 flyButton.MouseButton1Click:Connect(toggleFly)
+
+-- Flight ascend/descend buttons (mobile friendly)
+ascendButton.MouseButton1Down:Connect(function()
+    flyAscend = true
+end)
+ascendButton.MouseButton1Up:Connect(function()
+    flyAscend = false
+end)
+descendButton.MouseButton1Down:Connect(function()
+    flyDescend = true
+end)
+descendButton.MouseButton1Up:Connect(function()
+    flyDescend = false
+end)
 upButton.MouseButton1Click:Connect(function()
     currentSpeed = currentSpeed + 50
     speedLabel.Text = "VELOCIDAD: " .. currentSpeed
