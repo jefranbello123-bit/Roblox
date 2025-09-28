@@ -1,9 +1,4 @@
-diff --git a/mobile_fly_script.lua b/mobile_fly_script.lua
-index 0b388cfbbf25028853dcf9409c63e34b53ac5291..d249abe51d61eeab12b583d00d0a1e2ca50f917c 100644
---- a/mobile_fly_script.lua
-+++ b/mobile_fly_script.lua
-@@ -1,47 +1,47 @@
- --[[
+--[[
      Admin Panel Mobile (Rojo/Negro) — POSICIÓN ALTA + FIX TOUCH
      - Panel tipo "bottom sheet" que abre alto (top=10% por defecto).
      - ZIndex/Active configurados para que todos los controles se puedan tocar.
