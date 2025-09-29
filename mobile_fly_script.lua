@@ -1,5 +1,5 @@
--- Script completo con Fly, ESP, Speed, Lock-On, Noclip, Anti-Hit mejorado y Knockback
--- Colócalo como LocalScript en StarterPlayerScripts o StarterGui.
+-- Script completo con Fly, ESP, Speed, Lock-On, Noclip, Anti-Hit, Knockback y Floor
+-- Usar solo en tus propios juegos o con fines de prueba; respeta siempre los Términos de Roblox.
 
 local Players    = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -8,7 +8,7 @@ local Debris     = game:GetService("Debris")
 local localPlayer = Players.LocalPlayer
 local playerGui   = localPlayer:WaitForChild("PlayerGui")
 
--- Crear GUI principal
+-- GUI principal
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name           = "FlySpeedESPLockGui"
 screenGui.ResetOnSpawn   = false
@@ -35,7 +35,7 @@ openBtn.BorderSizePixel  = 0
 openBtn.ZIndex           = 101
 Instance.new("UICorner", openBtn).CornerRadius = UDim.new(0.5,0)
 
--- Menú (4 filas x 2 columnas)
+-- Menú principal (4 filas x 2 columnas; fila final con Knock y Floor)
 local menuFrame = Instance.new("Frame", screenGui)
 menuFrame.Size              = UDim2.new(0,260,0,280)
 menuFrame.Position          = UDim2.new(0.5,-130,0.5,-140)
@@ -68,7 +68,7 @@ closeBtn.BorderSizePixel  = 0
 closeBtn.ZIndex           = 101
 Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0.5,0)
 
--- Helper para botones
+-- Helper para botones de menú
 local function createToggleButton(name,text,pos,color)
     local btn = Instance.new("TextButton", menuFrame)
     btn.Name             = name
@@ -84,7 +84,7 @@ local function createToggleButton(name,text,pos,color)
     return btn
 end
 
--- Botones (Fly, ESP, Speed, Lock, Noclip, Anti-Hit, Knockback)
+-- Botones de funciones
 local flyToggleBtn     = createToggleButton("FlyToggle",    "Fly OFF",      UDim2.new(0,10,0,40),  Color3.fromRGB(220,45,45))
 local espToggleBtn     = createToggleButton("ESPToggle",    "ESP OFF",      UDim2.new(0,130,0,40), Color3.fromRGB(45,140,220))
 local speedToggleBtn   = createToggleButton("SpeedToggle",  "Speed OFF",    UDim2.new(0,10,0,90),  Color3.fromRGB(45,220,120))
@@ -92,8 +92,9 @@ local lockToggleBtn    = createToggleButton("LockToggle",   "Lock OFF",     UDim
 local noclipToggleBtn  = createToggleButton("NoclipToggle", "Noclip OFF",   UDim2.new(0,10,0,140), Color3.fromRGB(220,90,45))
 local antiHitToggleBtn = createToggleButton("AntiHitToggle","Anti-Hit OFF", UDim2.new(0,130,0,140),Color3.fromRGB(120,120,120))
 local knockToggleBtn   = createToggleButton("KnockToggle",  "Knockback OFF",UDim2.new(0,10,0,190), Color3.fromRGB(200,100,220))
+local floorToggleBtn   = createToggleButton("FloorToggle",  "Floor OFF",    UDim2.new(0,130,0,190),Color3.fromRGB(180,180,60))
 
--- Botones laterales
+-- Botones laterales (ascenso, descenso, velocidad)
 local ascendBtn, descendBtn, speedUpBtn, speedDownBtn = Instance.new("TextButton"), Instance.new("TextButton"), Instance.new("TextButton"), Instance.new("TextButton")
 ascendBtn.Parent, descendBtn.Parent, speedUpBtn.Parent, speedDownBtn.Parent = screenGui, screenGui, screenGui, screenGui
 ascendBtn.Size             = UDim2.new(0,50,0,50)
@@ -140,8 +141,8 @@ speedDownBtn.BorderSizePixel  = 0
 speedDownBtn.Visible          = false
 speedDownBtn.ZIndex           = 101
 
--- Variables de estado y conexiones
-local flying, espEnabled, speedEnabled, noclipEnabled, lockEnabled, antiHitEnabled, knockbackEnabled = false, false, false, false, false, false, false
+-- Estados y variables
+local flying, espEnabled, speedEnabled, noclipEnabled, lockEnabled, antiHitEnabled, knockbackEnabled, floorEnabled = false, false, false, false, false, false, false, false
 local ascend, descend = false, false
 local bodyGyro, bodyVel, flyConnection
 local currentHighlights = {}
@@ -156,8 +157,9 @@ local targetCharacter, lockConnection
 local antiDamageConn, platformConn, stateConn, antiKnockConn
 local knockbackConnections = {}
 local knockbackPower, upwardPower = 100, 50
+local floorConnection
 
--- Mantenimiento de velocidad (Speed)
+-- Mantenimiento de velocidad
 local function maintainSpeed()
     if speedConnection then speedConnection:Disconnect() end
     speedConnection = RunService.Heartbeat:Connect(function()
@@ -169,7 +171,7 @@ local function maintainSpeed()
     end)
 end
 
--- Funciones de colisión (noclip)
+-- Noclip colisiones
 local function setCharacterCollision(enabled)
     local char = localPlayer.Character
     if not char then return end
@@ -186,14 +188,12 @@ local function startNoclip()
     local hrp  = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
     setCharacterCollision(false)
-    noclipBodyGyro           = Instance.new("BodyGyro")
+    noclipBodyGyro           = Instance.new("BodyGyro", hrp)
     noclipBodyGyro.P         = 9e4
     noclipBodyGyro.MaxTorque = Vector3.new(math.huge,math.huge,math.huge)
-    noclipBodyGyro.Parent    = hrp
-    noclipBodyVel            = Instance.new("BodyVelocity")
+    noclipBodyVel            = Instance.new("BodyVelocity", hrp)
     noclipBodyVel.MaxForce   = Vector3.new(math.huge,math.huge,math.huge)
     noclipBodyVel.P          = 9e4
-    noclipBodyVel.Parent     = hrp
     noclipConnection         = RunService.RenderStepped:Connect(function()
         local dir = Vector3.new()
         local char2 = localPlayer.Character
@@ -231,14 +231,12 @@ local function startFly()
     local char = localPlayer.Character or localPlayer.CharacterAdded:Wait()
     local hrp  = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
-    bodyGyro          = Instance.new("BodyGyro")
+    bodyGyro          = Instance.new("BodyGyro", hrp)
     bodyGyro.P        = 9e4
     bodyGyro.MaxTorque= Vector3.new(math.huge,math.huge,math.huge)
-    bodyGyro.Parent   = hrp
-    bodyVel           = Instance.new("BodyVelocity")
+    bodyVel           = Instance.new("BodyVelocity", hrp)
     bodyVel.MaxForce  = Vector3.new(math.huge,math.huge,math.huge)
     bodyVel.P         = 9e4
-    bodyVel.Parent    = hrp
     flyConnection     = RunService.RenderStepped:Connect(function()
         local dir = Vector3.new()
         local char2 = localPlayer.Character
@@ -289,9 +287,7 @@ local function enableESP()
             highlightPlayer(plr, plr.Character)
             if not espConnections[plr] then
                 espConnections[plr] = plr.CharacterAdded:Connect(function(char)
-                    if espEnabled then
-                        task.defer(function() highlightPlayer(plr, char) end)
-                    end
+                    if espEnabled then task.defer(function() highlightPlayer(plr, char) end) end
                 end)
             end
         end
@@ -301,9 +297,7 @@ local function enableESP()
             if plr ~= localPlayer and espEnabled then
                 highlightPlayer(plr, plr.Character)
                 espConnections[plr] = plr.CharacterAdded:Connect(function(char)
-                    if espEnabled then
-                        task.defer(function() highlightPlayer(plr, char) end)
-                    end
+                    if espEnabled then task.defer(function() highlightPlayer(plr, char) end) end
                 end)
             end
         end)
@@ -316,10 +310,7 @@ local function disableESP()
         if conn then conn:Disconnect() end
         espConnections[plr] = nil
     end
-    if espGlobalConnection then
-        espGlobalConnection:Disconnect()
-        espGlobalConnection = nil
-    end
+    if espGlobalConnection then espGlobalConnection:Disconnect() espGlobalConnection = nil end
     for plr, highlight in pairs(currentHighlights) do
         if highlight then highlight:Destroy() end
         currentHighlights[plr] = nil
@@ -412,13 +403,12 @@ local function stopLock()
     targetCharacter = nil
 end
 
--- Anti-Hit (vertical y horizontal)
+-- Anti-Hit con mayor caída y sin impulso horizontal
 local function enableAntiHit()
     antiHitEnabled = true
     local char = localPlayer.Character
     local hum  = char and char:FindFirstChildOfClass("Humanoid")
     if not hum then return end
-    -- mantener salud
     if not antiDamageConn then
         antiDamageConn = hum.HealthChanged:Connect(function()
             if antiHitEnabled and hum then
@@ -426,7 +416,6 @@ local function enableAntiHit()
             end
         end)
     end
-    -- evitar PlatformStand
     if not platformConn then
         platformConn = hum:GetPropertyChangedSignal("PlatformStand"):Connect(function()
             if antiHitEnabled and hum.PlatformStand then
@@ -434,15 +423,16 @@ local function enableAntiHit()
             end
         end)
     end
-    -- evitar ragdoll/freefall
     if not stateConn then
         stateConn = hum.StateChanged:Connect(function(_, new)
-            if antiHitEnabled and (new == Enum.HumanoidStateType.Freefall or new == Enum.HumanoidStateType.FallingDown or new == Enum.HumanoidStateType.Physics or new == Enum.HumanoidStateType.Ragdoll) then
+            if antiHitEnabled and (new == Enum.HumanoidStateType.Freefall
+                or new == Enum.HumanoidStateType.FallingDown
+                or new == Enum.HumanoidStateType.Physics
+                or new == Enum.HumanoidStateType.Ragdoll) then
                 hum:ChangeState(Enum.HumanoidStateType.Running)
             end
         end)
     end
-    -- controlar la velocidad para evitar que te empujen
     if not antiKnockConn then
         antiKnockConn = RunService.Heartbeat:Connect(function()
             if not antiHitEnabled then return end
@@ -451,18 +441,14 @@ local function enableAntiHit()
             local root  = char and char:FindFirstChild("HumanoidRootPart")
             if hum and root then
                 local move    = hum.MoveDirection
-                local desired = Vector3.new(move.X, 0, move.Z)
-                -- si te mueves, aplica tu velocidad; si no, cero horizontal
-                if desired.Magnitude > 0 then
-                    desired = desired.Unit * (noclipEnabled and noclipSpeed or hum.WalkSpeed)
-                else
-                    desired = Vector3.new(0,0,0)
+                local desired = Vector3.new(0,0,0)
+                if move.Magnitude > 0 then
+                    desired = move.Unit * (noclipEnabled and noclipSpeed or hum.WalkSpeed)
                 end
                 local currentVel = root.AssemblyLinearVelocity
                 local yVel = currentVel.Y
-                -- si no saltas ni usas ascenso/descenso, fuerza caída rápida
                 if hum:GetState() ~= Enum.HumanoidStateType.Jumping and not ascend and not descend then
-                    yVel = -50
+                    yVel = -50 -- fuerte descenso para pegarse al suelo
                 end
                 root.AssemblyLinearVelocity = Vector3.new(desired.X, yVel, desired.Z)
             end
@@ -473,8 +459,8 @@ end
 local function disableAntiHit()
     antiHitEnabled = false
     if antiDamageConn then antiDamageConn:Disconnect() antiDamageConn = nil end
-    if platformConn  then platformConn:Disconnect()  platformConn = nil end
-    if stateConn    then stateConn:Disconnect()     stateConn = nil end
+    if platformConn then platformConn:Disconnect() platformConn = nil end
+    if stateConn then stateConn:Disconnect() stateConn = nil end
     if antiKnockConn then antiKnockConn:Disconnect() antiKnockConn = nil end
 end
 
@@ -520,11 +506,39 @@ local function disableKnockback()
     end
 end
 
+-- Floor: genera placas debajo del jugador
+local function spawnFloorPlate()
+    local char = localPlayer.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if root then
+        local plate = Instance.new("Part")
+        plate.Size = Vector3.new(6,1,6)
+        plate.Anchored = true
+        plate.Color = Color3.fromRGB(255,200,0)
+        plate.Position = root.Position - Vector3.new(0,3.5,0)
+        plate.Parent = workspace
+        Debris:AddItem(plate, 4)
+    end
+end
+
+local function enableFloor()
+    floorEnabled = true
+    floorConnection = RunService.Heartbeat:Connect(function()
+        spawnFloorPlate()
+    end)
+end
+
+local function disableFloor()
+    floorEnabled = false
+    if floorConnection then floorConnection:Disconnect() floorConnection = nil end
+end
+
 -- Reconectar modos al reaparecer
 localPlayer.CharacterAdded:Connect(function()
     if knockbackEnabled then disableKnockback() enableKnockback() end
     if antiHitEnabled then enableAntiHit() end
     if speedEnabled then maintainSpeed() end
+    if floorEnabled then enableFloor() end
 end)
 
 -- Conectar botones
@@ -631,7 +645,17 @@ knockToggleBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- Velocidad con flechas
+floorToggleBtn.MouseButton1Click:Connect(function()
+    if floorEnabled then
+        disableFloor()
+        floorToggleBtn.Text = "Floor OFF"
+    else
+        enableFloor()
+        floorToggleBtn.Text = "Floor ON"
+    end
+end)
+
+-- Ajustar velocidad
 speedUpBtn.MouseButton1Click:Connect(function()
     if speedTarget == "walk" and speedEnabled then
         local char = localPlayer.Character
@@ -675,7 +699,7 @@ closeBtn.MouseButton1Click:Connect(function()
     dragFrame.Visible = true
 end)
 
--- Arrastrar elementos
+-- Arrastrar menú y botón circular
 local draggingFlag, startPosInput, startPosGui
 local function beginDrag(input, gui)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -711,4 +735,4 @@ makeDraggable(dragFrame)
 makeDraggable(menuFrame)
 makeDraggable(openBtn)
 
-print("✅ Script con Anti-Hit y Knockback mejorados cargado")
+print("✅ Script actualizado con Floor cargado")
