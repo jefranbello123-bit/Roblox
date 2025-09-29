@@ -1,4 +1,4 @@
--- Fly, Speed, ESP, Lock-On, Noclip y Anti-Hit mejorado para móviles.
+-- Fly, Speed, ESP, Lock-On, Noclip y Anti-Hit mejorado con control de velocidad.
 -- Coloca este LocalScript en StarterPlayerScripts o StarterGui.
 
 local Players    = game:GetService("Players")
@@ -7,7 +7,7 @@ local RunService = game:GetService("RunService")
 local localPlayer = Players.LocalPlayer
 local playerGui   = localPlayer:WaitForChild("PlayerGui")
 
--- GUI principal
+-- Crear GUI principal
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name           = "FlySpeedESPLockGui"
 screenGui.ResetOnSpawn   = false
@@ -34,14 +34,13 @@ openBtn.BorderSizePixel  = 0
 openBtn.ZIndex           = 101
 Instance.new("UICorner", openBtn).CornerRadius = UDim.new(0.5,0)
 
--- Menú principal (dos columnas, tres filas)
+-- Menú principal (260x230, dos columnas)
 local menuFrame = Instance.new("Frame", screenGui)
 menuFrame.Size              = UDim2.new(0,260,0,230)
 menuFrame.Position          = UDim2.new(0.5,-130,0.5,-115)
 menuFrame.BackgroundColor3  = Color3.fromRGB(20,20,20)
 menuFrame.Visible           = false
 menuFrame.Active            = true
-menuFrame.ClipsDescendants  = false
 menuFrame.ZIndex            = 100
 Instance.new("UICorner", menuFrame).CornerRadius = UDim.new(0,8)
 
@@ -68,8 +67,8 @@ closeBtn.BorderSizePixel  = 0
 closeBtn.ZIndex           = 101
 Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0.5,0)
 
--- Helper para crear botones del menú
-local function createToggleButton(name,text,pos,color)
+-- Función auxiliar para botones
+local function createToggleButton(name, text, pos, color)
     local btn = Instance.new("TextButton", menuFrame)
     btn.Name             = name
     btn.Size             = UDim2.new(0,120,0,40)
@@ -84,16 +83,17 @@ local function createToggleButton(name,text,pos,color)
     return btn
 end
 
--- Botones del menú principal
-local flyToggleBtn    = createToggleButton("FlyToggle",    "Fly OFF",    UDim2.new(0,10,0,40),  Color3.fromRGB(220,45,45))
-local espToggleBtn    = createToggleButton("ESPToggle",    "ESP OFF",    UDim2.new(0,130,0,40), Color3.fromRGB(45,140,220))
-local speedToggleBtn  = createToggleButton("SpeedToggle",  "Speed OFF",  UDim2.new(0,10,0,90),  Color3.fromRGB(45,220,120))
-local lockToggleBtn   = createToggleButton("LockToggle",   "Lock OFF",   UDim2.new(0,130,0,90), Color3.fromRGB(140,120,220))
-local noclipToggleBtn = createToggleButton("NoclipToggle", "Noclip OFF", UDim2.new(0,10,0,140), Color3.fromRGB(220,90,45))
-local antiHitToggleBtn= createToggleButton("AntiHitToggle","Anti-Hit OFF", UDim2.new(0,130,0,140), Color3.fromRGB(120,120,120))
+-- Crear botones de Fly, ESP, Speed, Lock, Noclip y Anti‑Hit
+local flyToggleBtn     = createToggleButton("FlyToggle",    "Fly OFF",     UDim2.new(0,10,0,40),  Color3.fromRGB(220,45,45))
+local espToggleBtn     = createToggleButton("ESPToggle",    "ESP OFF",     UDim2.new(0,130,0,40), Color3.fromRGB(45,140,220))
+local speedToggleBtn   = createToggleButton("SpeedToggle",  "Speed OFF",   UDim2.new(0,10,0,90),  Color3.fromRGB(45,220,120))
+local lockToggleBtn    = createToggleButton("LockToggle",   "Lock OFF",    UDim2.new(0,130,0,90), Color3.fromRGB(140,120,220))
+local noclipToggleBtn  = createToggleButton("NoclipToggle", "Noclip OFF",  UDim2.new(0,10,0,140), Color3.fromRGB(220,90,45))
+local antiHitToggleBtn = createToggleButton("AntiHitToggle","Anti-Hit OFF",UDim2.new(0,130,0,140), Color3.fromRGB(120,120,120))
 
--- Botones de ascenso y velocidad
-local ascendBtn = Instance.new("TextButton", screenGui)
+-- Botones laterales para ascender/descender y ajustar velocidad
+local ascendBtn, descendBtn, speedUpBtn, speedDownBtn = Instance.new("TextButton"), Instance.new("TextButton"), Instance.new("TextButton"), Instance.new("TextButton")
+ascendBtn.Parent, descendBtn.Parent, speedUpBtn.Parent, speedDownBtn.Parent = screenGui, screenGui, screenGui, screenGui
 ascendBtn.Size             = UDim2.new(0,50,0,50)
 ascendBtn.Position         = UDim2.new(0.88,0,0.48,0)
 ascendBtn.BackgroundColor3 = Color3.fromRGB(220,45,45)
@@ -105,7 +105,6 @@ ascendBtn.BorderSizePixel  = 0
 ascendBtn.Visible          = false
 ascendBtn.ZIndex           = 101
 
-local descendBtn = Instance.new("TextButton", screenGui)
 descendBtn.Size             = UDim2.new(0,50,0,50)
 descendBtn.Position         = UDim2.new(0.88,0,0.62,0)
 descendBtn.BackgroundColor3 = Color3.fromRGB(160,25,25)
@@ -117,7 +116,6 @@ descendBtn.BorderSizePixel  = 0
 descendBtn.Visible          = false
 descendBtn.ZIndex           = 101
 
-local speedUpBtn = Instance.new("TextButton", screenGui)
 speedUpBtn.Size             = UDim2.new(0,50,0,50)
 speedUpBtn.Position         = UDim2.new(0.74,0,0.48,0)
 speedUpBtn.BackgroundColor3 = Color3.fromRGB(45,220,120)
@@ -129,7 +127,6 @@ speedUpBtn.BorderSizePixel  = 0
 speedUpBtn.Visible          = false
 speedUpBtn.ZIndex           = 101
 
-local speedDownBtn = Instance.new("TextButton", screenGui)
 speedDownBtn.Size             = UDim2.new(0,50,0,50)
 speedDownBtn.Position         = UDim2.new(0.74,0,0.62,0)
 speedDownBtn.BackgroundColor3 = Color3.fromRGB(25,160,80)
@@ -141,34 +138,34 @@ speedDownBtn.BorderSizePixel  = 0
 speedDownBtn.Visible          = false
 speedDownBtn.ZIndex           = 101
 
--- Estados y conexiones
+-- Variables y conexiones de estado
 local flying, espEnabled, speedEnabled, noclipEnabled, lockEnabled, antiHitEnabled = false, false, false, false, false, false
 local ascend, descend = false, false
 local bodyGyro, bodyVel, flyConnection
-local currentHighlights   = {}
-local espConnections      = {}
+local currentHighlights = {}
+local espConnections    = {}
 local espGlobalConnection
 local originalWalkSpeed, currentSpeed, speedConnection
 local speedIncrement, maxSpeed = 4, 100
-local speedTarget
-local noclipSpeed      = 50
+local speedTarget = nil
+local noclipSpeed = 50
 local noclipBodyGyro, noclipBodyVel, noclipConnection, noclipCollisionConn
 local targetCharacter, lockConnection
-local antiDamageConn, platformConn, stateConn
+local antiDamageConn, platformConn, stateConn, antiKnockConn
 
--- Función para mantener la velocidad original/ajustada
+-- Mantenimiento de la velocidad (usado por Speed)
 local function maintainSpeed()
-    if speedConnection then speedConnection:Disconnect() speedConnection = nil end
+    if speedConnection then speedConnection:Disconnect() end
     speedConnection = RunService.Heartbeat:Connect(function()
         local char = localPlayer.Character
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        local hum  = char and char:FindFirstChildOfClass("Humanoid")
         if hum and speedEnabled and currentSpeed then
             hum.WalkSpeed = currentSpeed
         end
     end)
 end
 
--- Funciones de colisión para Noclip (igual que antes)
+-- Funciones de colisión para Noclip (sin cambios)
 local function setCharacterCollision(enabled)
     local char = localPlayer.Character
     if not char then return end
@@ -179,7 +176,7 @@ local function setCharacterCollision(enabled)
     end
 end
 
--- Noclip (igual que antes, sin tocar)
+-- Noclip
 local function startNoclip()
     local char = localPlayer.Character or localPlayer.CharacterAdded:Wait()
     local hrp  = char:FindFirstChild("HumanoidRootPart")
@@ -225,7 +222,7 @@ local function stopNoclip()
     if noclipBodyVel       then noclipBodyVel:Destroy()       noclipBodyVel       = nil end
 end
 
--- Fly (igual que antes)
+-- Fly (sin cambios)
 local function startFly()
     local char = localPlayer.Character or localPlayer.CharacterAdded:Wait()
     local hrp  = char:FindFirstChild("HumanoidRootPart")
@@ -263,7 +260,7 @@ local function stopFly()
     if bodyVel       then bodyVel:Destroy()       bodyVel       = nil end
 end
 
--- ESP (igual que antes)
+-- ESP (sin cambios)
 local function enableESP()
     espEnabled = true
     local function highlightPlayer(plr, character)
@@ -271,12 +268,12 @@ local function enableESP()
         local existing = currentHighlights[plr]
         if not existing then
             local h = Instance.new("Highlight")
-            h.FillColor         = Color3.new(1,0,0)
-            h.FillTransparency  = 0.5
-            h.OutlineColor      = Color3.new(1,1,1)
+            h.FillColor = Color3.new(1,0,0)
+            h.FillTransparency = 0.5
+            h.OutlineColor = Color3.new(1,1,1)
             h.OutlineTransparency = 0
-            h.Adornee           = character
-            h.Parent            = character
+            h.Adornee = character
+            h.Parent  = character
             currentHighlights[plr] = h
         else
             existing.Adornee = character
@@ -288,9 +285,7 @@ local function enableESP()
             highlightPlayer(plr, plr.Character)
             if not espConnections[plr] then
                 espConnections[plr] = plr.CharacterAdded:Connect(function(char)
-                    if espEnabled then
-                        task.defer(function() highlightPlayer(plr, char) end)
-                    end
+                    if espEnabled then task.defer(function() highlightPlayer(plr, char) end) end
                 end)
             end
         end
@@ -300,9 +295,7 @@ local function enableESP()
             if plr ~= localPlayer and espEnabled then
                 highlightPlayer(plr, plr.Character)
                 espConnections[plr] = plr.CharacterAdded:Connect(function(char)
-                    if espEnabled then
-                        task.defer(function() highlightPlayer(plr, char) end)
-                    end
+                    if espEnabled then task.defer(function() highlightPlayer(plr, char) end) end
                 end)
             end
         end)
@@ -392,16 +385,16 @@ local function startLock()
     lockConnection = RunService.RenderStepped:Connect(function()
         if not targetCharacter or not targetCharacter.Parent then
             if lockConnection then lockConnection:Disconnect() lockConnection = nil end
-            lockEnabled       = false
-            lockToggleBtn.Text = "Lock OFF"
+            lockEnabled        = false
+            lockToggleBtn.Text  = "Lock OFF"
             return
         end
         local cam = workspace.CurrentCamera
         if cam then
-            local camPos    = cam.CFrame.Position
+            local camPos = cam.CFrame.Position
             local targetHRP = targetCharacter:FindFirstChild("HumanoidRootPart")
             local lookAtPos = targetHRP and targetHRP.Position or targetCharacter:GetPivot().Position
-            cam.CFrame      = CFrame.lookAt(camPos, lookAtPos)
+            cam.CFrame = CFrame.lookAt(camPos, lookAtPos)
         end
     end)
 end
@@ -411,36 +404,56 @@ local function stopLock()
     targetCharacter = nil
 end
 
--- Anti-Hit mejorado
+-- Anti-Hit mejorado con control de velocidad
 local function enableAntiHit()
     antiHitEnabled = true
     local char = localPlayer.Character
     local hum  = char and char:FindFirstChildOfClass("Humanoid")
-    if hum then
-        if not antiDamageConn then
-            antiDamageConn = hum.HealthChanged:Connect(function(hp)
-                if antiHitEnabled and hum then
-                    hum.Health = hum.MaxHealth
+    if not hum then return end
+    -- Mantener salud al máximo
+    if not antiDamageConn then
+        antiDamageConn = hum.HealthChanged:Connect(function(hp)
+            if antiHitEnabled and hum then
+                hum.Health = hum.MaxHealth
+            end
+        end)
+    end
+    -- Evitar PlatformStand y ragdoll
+    if not platformConn then
+        platformConn = hum:GetPropertyChangedSignal("PlatformStand"):Connect(function()
+            if antiHitEnabled and hum.PlatformStand then
+                hum.PlatformStand = false
+            end
+        end)
+    end
+    if not stateConn then
+        stateConn = hum.StateChanged:Connect(function(_, newState)
+            if antiHitEnabled and (newState == Enum.HumanoidStateType.Freefall
+                or newState == Enum.HumanoidStateType.FallingDown
+                or newState == Enum.HumanoidStateType.Physics
+                or newState == Enum.HumanoidStateType.Ragdoll) then
+                hum:ChangeState(Enum.HumanoidStateType.Running)
+            end
+        end)
+    end
+    -- Controlar la velocidad horizontal para evitar knockback
+    if not antiKnockConn then
+        antiKnockConn = RunService.Heartbeat:Connect(function()
+            if not antiHitEnabled then return end
+            local char = localPlayer.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            if hum and root then
+                local move = hum.MoveDirection
+                local desired = Vector3.new(move.X, 0, move.Z)
+                if desired.Magnitude > 0 then
+                    desired = desired.Unit * (noclipEnabled and noclipSpeed or hum.WalkSpeed)
                 end
-            end)
-        end
-        if not platformConn then
-            platformConn = hum:GetPropertyChangedSignal("PlatformStand"):Connect(function()
-                if antiHitEnabled and hum.PlatformStand then
-                    hum.PlatformStand = false
-                end
-            end)
-        end
-        if not stateConn then
-            stateConn = hum.StateChanged:Connect(function(_, new)
-                if antiHitEnabled and (new == Enum.HumanoidStateType.Freefall 
-                    or new == Enum.HumanoidStateType.FallingDown 
-                    or new == Enum.HumanoidStateType.Physics 
-                    or new == Enum.HumanoidStateType.Ragdoll) then
-                    hum:ChangeState(Enum.HumanoidStateType.Running)
-                end
-            end)
-        end
+                -- Mantener la velocidad vertical (para saltar)
+                local currentVel = root.AssemblyLinearVelocity
+                root.AssemblyLinearVelocity = Vector3.new(desired.X, currentVel.Y, desired.Z)
+            end
+        end)
     end
 end
 
@@ -449,9 +462,10 @@ local function disableAntiHit()
     if antiDamageConn then antiDamageConn:Disconnect() antiDamageConn = nil end
     if platformConn then platformConn:Disconnect() platformConn = nil end
     if stateConn then stateConn:Disconnect() stateConn = nil end
+    if antiKnockConn then antiKnockConn:Disconnect() antiKnockConn = nil end
 end
 
--- Mantener la velocidad al reaparecer y reactivar Anti-Hit
+-- Mantener Speed y Anti-Hit al reaparecer
 task.spawn(function()
     local function onCharacter(char)
         char:WaitForChild("Humanoid")
@@ -475,19 +489,13 @@ task.spawn(function()
     localPlayer.CharacterAdded:Connect(onCharacter)
 end)
 
--- Limpieza del ESP al salir un jugador (igual que antes)
+-- Limpiar ESP al salir un jugador
 Players.PlayerRemoving:Connect(function(plr)
-    if espConnections[plr] then
-        espConnections[plr]:Disconnect()
-        espConnections[plr] = nil
-    end
-    if currentHighlights[plr] then
-        currentHighlights[plr]:Destroy()
-        currentHighlights[plr] = nil
-    end
+    if espConnections[plr] then espConnections[plr]:Disconnect() espConnections[plr] = nil end
+    if currentHighlights[plr] then currentHighlights[plr]:Destroy() currentHighlights[plr] = nil end
 end)
 
--- Controladores de botones del menú (las mismas funciones que antes, con Anti-Hit)
+-- Conexiones de los botones
 flyToggleBtn.MouseButton1Click:Connect(function()
     flying = not flying
     flyToggleBtn.Text = flying and "Fly ON" or "Fly OFF"
@@ -588,10 +596,10 @@ speedUpBtn.MouseButton1Click:Connect(function()
         local hum  = char and char:FindFirstChildOfClass("Humanoid")
         if hum then
             currentSpeed = math.min(hum.WalkSpeed + speedIncrement, maxSpeed)
-            hum.WalkSpeed= currentSpeed
+            hum.WalkSpeed = currentSpeed
         end
     elseif speedTarget == "noclip" and noclipEnabled then
-        noclipSpeed  = math.min(noclipSpeed + speedIncrement, 200)
+        noclipSpeed = math.min(noclipSpeed + speedIncrement, 200)
     end
 end)
 
@@ -605,7 +613,7 @@ speedDownBtn.MouseButton1Click:Connect(function()
             hum.WalkSpeed  = currentSpeed
         end
     elseif speedTarget == "noclip" and noclipEnabled then
-        noclipSpeed  = math.max(noclipSpeed - speedIncrement, 10)
+        noclipSpeed = math.max(noclipSpeed - speedIncrement, 10)
     end
 end)
 
@@ -615,7 +623,7 @@ ascendBtn.MouseButton1Up:Connect(function() ascend = false end)
 descendBtn.MouseButton1Down:Connect(function() descend = true end)
 descendBtn.MouseButton1Up:Connect(function() descend = false end)
 
--- Mostrar/ocultar menú
+-- Mostrar/ocultar el menú
 openBtn.MouseButton1Click:Connect(function()
     dragFrame.Visible = false
     menuFrame.Visible = true
@@ -625,7 +633,7 @@ closeBtn.MouseButton1Click:Connect(function()
     dragFrame.Visible = true
 end)
 
--- Funciones para arrastrar el menú y el botón circular
+-- Arrastrar el menú y el botón circular
 local draggingFlag, startPosInput, startPosGui
 local function beginDrag(input, gui)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -642,14 +650,14 @@ local function updateDrag(input, gui)
         local delta = input.Position - startPosInput
         local newPos= UDim2.new(startPosGui.X.Scale,startPosGui.X.Offset+delta.X,
                                  startPosGui.Y.Scale,startPosGui.Y.Offset+delta.Y)
-        local cam   = workspace.CurrentCamera
-        local viewport = cam and cam.ViewportSize or Vector2.new(800,600)
-        local guiSize  = gui.AbsoluteSize
-        local maxX     = viewport.X - guiSize.X
-        local maxY     = viewport.Y - guiSize.Y
-        local clampedX = math.clamp(newPos.X.Offset,0,maxX)
-        local clampedY = math.clamp(newPos.Y.Offset,0,maxY)
-        gui.Position   = UDim2.new(0,clampedX,0,clampedY)
+        local cam = workspace.CurrentCamera
+        local viewport  = cam and cam.ViewportSize or Vector2.new(800,600)
+        local guiSize   = gui.AbsoluteSize
+        local maxX      = viewport.X - guiSize.X
+        local maxY      = viewport.Y - guiSize.Y
+        local clampedX  = math.clamp(newPos.X.Offset,0,maxX)
+        local clampedY  = math.clamp(newPos.Y.Offset,0,maxY)
+        gui.Position    = UDim2.new(0,clampedX,0,clampedY)
     end
 end
 local function makeDraggable(gui)
@@ -661,4 +669,4 @@ makeDraggable(dragFrame)
 makeDraggable(menuFrame)
 makeDraggable(openBtn)
 
-print("✅ Fly, ESP, Speed, Lock, Noclip y Anti-Hit mejorados cargados")
+print("✅ Fly, ESP, Speed, Lock, Noclip y Anti-Hit mejorado cargados")
