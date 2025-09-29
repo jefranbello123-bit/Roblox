@@ -1,15 +1,15 @@
 -- Script completo: Fly, ESP, Speed, Lock Quick Button, Noclip, Anti-Hit, Knockback, Floor, HUD, Ajustes
--- + Mejoras visuales (gradientes, bordes, sombras) y NUEVOS: Golpe Rápido (fast attack) y Kill Aura.
--- Pensado para uso en tus propios juegos/pruebas. Respeta los Términos de Roblox.
--- Nota: "Golpe Rápido" y "Kill Aura" activan Tool:Activate() del arma equipada (cliente). Si tu juego no permite dañar desde cliente, úsalo solo en tus mapas de pruebas.
+-- + UI pulida (bordes/gradientes suaves) + Golpe Rápido (fast attack) + Kill Aura.
+-- 🔧 Versión estable: usa el mismo sistema de arrastre/click que te funcionaba.
+-- ⚠️ Fast Attack/Kill Aura llaman Tool:Activate() del arma equipada. Úsalo en tus mapas de pruebas.
 
 --==================================================
 -- SERVICIOS
 --==================================================
-local Players     = game:GetService("Players")
-local RunService  = game:GetService("RunService")
-local Debris      = game:GetService("Debris")
-local Workspace   = game:GetService("Workspace")
+local Players    = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Debris     = game:GetService("Debris")
+local Workspace  = game:GetService("Workspace")
 
 local localPlayer = Players.LocalPlayer
 local playerGui   = localPlayer:WaitForChild("PlayerGui")
@@ -23,20 +23,20 @@ local NOCLIP_MAX_SPEED      = 200
 local FLY_DEFAULT_SPEED     = 50
 local NOCLIP_DEFAULT_SPEED  = 50
 
--- Lock-on (ajustables también en "Ajustes")
+-- Lock-on
 local LOCK_DOT_THRESHOLD    = 0.90 -- 0.70–0.98
 local LOCK_RANGE            = 220  -- 100–300
-local LOCK_SMOOTH_ALPHA     = 0.25 -- 0..1 (lerp)
-local LOCK_LOSS_GRACE       = 0.40 -- seg
+local LOCK_SMOOTH_ALPHA     = 0.25
+local LOCK_LOSS_GRACE       = 0.40 -- seg (gracia si el objetivo se sale brevemente)
 
 -- Fast Attack / Kill Aura
-local FAST_ATK_RATE_HZ      = 12   -- por defecto (2–25 en slider)
+local FAST_ATK_RATE_HZ      = 12   -- 2–25
 local KA_RANGE_DEFAULT      = 18   -- studs
-local KA_TEAM_CHECK         = true -- evita atacar a tu mismo equipo
-local KA_FACE_TARGET        = true -- girar el personaje hacia el objetivo (no toca la cámara)
+local KA_TEAM_CHECK         = true -- no atacar mismo equipo
+local KA_FACE_TARGET        = true -- girar cuerpo hacia objetivo
 
 --==================================================
--- GUI PRINCIPAL (con estilo)
+-- GUI PRINCIPAL (con estilo ligero y estable)
 --==================================================
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name           = "FlySpeedESPLockGui"
@@ -45,56 +45,32 @@ screenGui.IgnoreGuiInset = true
 screenGui.DisplayOrder   = 100
 screenGui.Parent         = playerGui
 
--- Helper: UI estilo (borde y gradiente)
+-- Helpers visuales seguros (sin rarezas)
 local function applyStroke(gui, thickness, color, transparency)
     local s = Instance.new("UIStroke")
-    s.Thickness = thickness or 1.5
-    s.Color = color or Color3.fromRGB(255,255,255)
-    s.Transparency = transparency or 0.25
+    s.Thickness       = thickness or 1.5
+    s.Color           = color or Color3.fromRGB(255,255,255)
+    s.Transparency    = transparency or 0.25
     s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     s.Parent = gui
     return s
 end
 
-local function applyGradient(gui, c1, c2)
+local function darken(c, amt) -- oscurece sin cálculos raros
+    return c:Lerp(Color3.fromRGB(0,0,0), amt or 0.22)
+end
+local function applySoftGradient(gui, baseColor)
     local g = Instance.new("UIGradient")
-    g.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, c1),
-        ColorSequenceKeypoint.new(1, c2)
+    g.Color    = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, baseColor),
+        ColorSequenceKeypoint.new(1, darken(baseColor, 0.25)),
     })
     g.Rotation = 90
-    g.Parent = gui
+    g.Parent   = gui
     return g
 end
 
-local function addShadow(parent, radius)
-    local shadow = Instance.new("Frame")
-    shadow.Size = UDim2.new(1,16,1,16)
-    shadow.Position = UDim2.new(0,-8,0,-8)
-    shadow.BackgroundTransparency = 1
-    shadow.ZIndex = (parent.ZIndex or 1) - 1
-    shadow.Parent = parent
-
-    local blur = Instance.new("ImageLabel", shadow)
-    blur.Size = UDim2.new(1,0,1,0)
-    blur.BackgroundTransparency = 1
-    blur.Image = "rbxassetid://1316045217" -- sombra suave circular
-    blur.ImageColor3 = Color3.fromRGB(0,0,0)
-    blur.ImageTransparency = 0.55
-    blur.ScaleType = Enum.ScaleType.Slice
-    blur.SliceCenter = Rect.new(10,10,118,118)
-    blur.ZIndex = shadow.ZIndex
-    if radius then
-        local uic = parent:FindFirstChildOfClass("UICorner")
-        if not uic then
-            local c = Instance.new("UICorner", parent)
-            c.CornerRadius = UDim.new(0, radius)
-        end
-    end
-    return shadow
-end
-
--- Botón circular (☰) para abrir menú (contenedor movible)
+-- Botón circular (☰) contenedor movible
 local dragFrame = Instance.new("Frame", screenGui)
 dragFrame.Size                   = UDim2.new(0,60,0,60)
 dragFrame.Position               = UDim2.new(0.08,0,0.55,0)
@@ -104,20 +80,20 @@ dragFrame.ZIndex                 = 100
 
 local openBtn = Instance.new("TextButton", dragFrame)
 openBtn.Size             = UDim2.new(1,0,1,0)
-openBtn.BackgroundColor3 = Color3.fromRGB(50,170,160)   -- TEAL
+openBtn.BackgroundColor3 = Color3.fromRGB(50,170,160) -- TEAL
 openBtn.TextColor3       = Color3.new(1,1,1)
 openBtn.Font             = Enum.Font.GothamBold
 openBtn.TextSize         = 28
 openBtn.Text             = "☰"
 openBtn.BorderSizePixel  = 0
 openBtn.ZIndex           = 101
-applyGradient(openBtn, Color3.fromRGB(50,170,160), Color3.fromRGB(35,125,120))
-applyStroke(openBtn, 1.6, Color3.fromRGB(240,255,255), 0.1)
 Instance.new("UICorner", openBtn).CornerRadius = UDim.new(0.5,0)
+applyStroke(openBtn, 1.6, Color3.fromRGB(235,255,255), 0.1)
+applySoftGradient(openBtn, openBtn.BackgroundColor3)
 
--- Menú principal (6 filas x 2 columnas, un poco más alto)
+-- Menú principal (6 filas x 2 columnas)
 local menuFrame = Instance.new("Frame", screenGui)
-menuFrame.Size              = UDim2.new(0,260,0,360) -- antes ~320
+menuFrame.Size              = UDim2.new(0,260,0,360)
 menuFrame.Position          = UDim2.new(0.065,0,0.20,0)
 menuFrame.BackgroundColor3  = Color3.fromRGB(24,24,30)
 menuFrame.Visible           = false
@@ -125,8 +101,7 @@ menuFrame.Active            = true
 menuFrame.ZIndex            = 100
 Instance.new("UICorner", menuFrame).CornerRadius = UDim.new(0,10)
 applyStroke(menuFrame, 2, Color3.fromRGB(60,70,100), 0.35)
-applyGradient(menuFrame, Color3.fromRGB(28,28,36), Color3.fromRGB(20,20,28))
-addShadow(menuFrame,10)
+applySoftGradient(menuFrame, Color3.fromRGB(28,28,36))
 
 local titleLabel = Instance.new("TextLabel", menuFrame)
 titleLabel.Size                   = UDim2.new(1,-40,0,26)
@@ -150,10 +125,10 @@ closeBtn.Text             = "×"
 closeBtn.BorderSizePixel  = 0
 closeBtn.ZIndex           = 101
 Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0.5,0)
-applyStroke(closeBtn,1.5,Color3.fromRGB(255,255,255),0.1)
+applyStroke(closeBtn,1.4,Color3.fromRGB(255,255,255),0.08)
 
 -- Helper para botones del menú
-local function createToggleButton(name,text,pos,color)
+local function createToggleButton(name, text, pos, color)
     local btn = Instance.new("TextButton", menuFrame)
     btn.Name             = name
     btn.Size             = UDim2.new(0,120,0,40)
@@ -166,26 +141,24 @@ local function createToggleButton(name,text,pos,color)
     btn.BorderSizePixel  = 0
     btn.ZIndex           = 101
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0,8)
-    applyStroke(btn,1.4,Color3.fromRGB(245,245,255),0.15)
-    applyGradient(btn, color, Color3.fromRGB(math.max(0,color.R*255-35), math.max(0,color.G*255-35), math.max(0,color.B*255-35)))
+    applyStroke(btn, 1.2, Color3.fromRGB(245,245,255), 0.15)
+    applySoftGradient(btn, color)
     return btn
 end
 
--- Botones del menú (paleta original + nuevos)
-local flyToggleBtn     = createToggleButton("FlyToggle",     "Fly OFF",         UDim2.new(0,10,0,40),  Color3.fromRGB(0,170,255))   -- cyan
-local espToggleBtn     = createToggleButton("ESPToggle",     "ESP OFF",         UDim2.new(0,130,0,40), Color3.fromRGB(255,105,180)) -- rosa
-local speedToggleBtn   = createToggleButton("SpeedToggle",   "Speed OFF",       UDim2.new(0,10,0,90),  Color3.fromRGB(255,165,0))   -- naranja
-local lockToggleBtn    = createToggleButton("LockToggle",    "Lock Btn OFF",    UDim2.new(0,130,0,90), Color3.fromRGB(120,200,255)) -- azul claro
-local noclipToggleBtn  = createToggleButton("NoclipToggle",  "Noclip OFF",      UDim2.new(0,10,0,140), Color3.fromRGB(255,99,71))   -- tomate
-local antiHitToggleBtn = createToggleButton("AntiHitToggle", "Anti-Hit OFF",    UDim2.new(0,130,0,140),Color3.fromRGB(100,110,130)) -- gris azulado
-local knockToggleBtn   = createToggleButton("KnockToggle",   "Knockback OFF",   UDim2.new(0,10,0,190), Color3.fromRGB(144,238,144)) -- verde claro
-local floorToggleBtn   = createToggleButton("FloorToggle",   "Floor OFF",       UDim2.new(0,130,0,190),Color3.fromRGB(210,180,140)) -- tan
-local hudToggleBtn     = createToggleButton("HUDToggle",     "HUD OFF",         UDim2.new(0,10,0,240), Color3.fromRGB(80,120,200))  -- HUD
-local settingsBtn      = createToggleButton("SettingsBtn",   "Ajustes",         UDim2.new(0,130,0,240),Color3.fromRGB(50,170,160))  -- teal
-
--- NUEVA FILA (6): Fast Attack y Kill Aura
-local fastAtkToggleBtn = createToggleButton("FastAtkToggle", "Golpe Rápido OFF",UDim2.new(0,10,0,290), Color3.fromRGB(255,215,0))   -- dorado
-local kaToggleBtn      = createToggleButton("KAToggle",      "Kill Aura OFF",   UDim2.new(0,130,0,290),Color3.fromRGB(170,120,255)) -- violeta
+-- Botones (paleta original + nuevos)
+local flyToggleBtn     = createToggleButton("FlyToggle",     "Fly OFF",         UDim2.new(0,10,0,40),  Color3.fromRGB(0,170,255))
+local espToggleBtn     = createToggleButton("ESPToggle",     "ESP OFF",         UDim2.new(0,130,0,40), Color3.fromRGB(255,105,180))
+local speedToggleBtn   = createToggleButton("SpeedToggle",   "Speed OFF",       UDim2.new(0,10,0,90),  Color3.fromRGB(255,165,0))
+local lockToggleBtn    = createToggleButton("LockToggle",    "Lock Btn OFF",    UDim2.new(0,130,0,90), Color3.fromRGB(120,200,255))
+local noclipToggleBtn  = createToggleButton("NoclipToggle",  "Noclip OFF",      UDim2.new(0,10,0,140), Color3.fromRGB(255,99,71))
+local antiHitToggleBtn = createToggleButton("AntiHitToggle", "Anti-Hit OFF",    UDim2.new(0,130,0,140),Color3.fromRGB(100,110,130))
+local knockToggleBtn   = createToggleButton("KnockToggle",   "Knockback OFF",   UDim2.new(0,10,0,190), Color3.fromRGB(144,238,144))
+local floorToggleBtn   = createToggleButton("FloorToggle",   "Floor OFF",       UDim2.new(0,130,0,190),Color3.fromRGB(210,180,140))
+local hudToggleBtn     = createToggleButton("HUDToggle",     "HUD OFF",         UDim2.new(0,10,0,240), Color3.fromRGB(80,120,200))
+local settingsBtn      = createToggleButton("SettingsBtn",   "Ajustes",         UDim2.new(0,130,0,240),Color3.fromRGB(50,170,160))
+local fastAtkToggleBtn = createToggleButton("FastAtkToggle", "Golpe Rápido OFF",UDim2.new(0,10,0,290), Color3.fromRGB(255,215,0))
+local kaToggleBtn      = createToggleButton("KAToggle",      "Kill Aura OFF",   UDim2.new(0,130,0,290),Color3.fromRGB(170,120,255))
 
 -- Botones laterales (móvil)
 local ascendBtn, descendBtn  = Instance.new("TextButton"), Instance.new("TextButton")
@@ -204,8 +177,8 @@ local function styleSide(btn, pos, color, txt)
     btn.Visible          = false
     btn.ZIndex           = 101
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0.4,0)
-    applyStroke(btn,1.4,Color3.fromRGB(245,245,255),0.15)
-    applyGradient(btn, color, Color3.fromRGB(math.max(0,color.R*255-35), math.max(0,color.G*255-35), math.max(0,color.B*255-35)))
+    applyStroke(btn, 1.2, Color3.fromRGB(245,245,255), 0.15)
+    applySoftGradient(btn, color)
 end
 styleSide(ascendBtn,    UDim2.new(0.86,0,0.45,0), Color3.fromRGB(0,170,255), "↑")
 styleSide(descendBtn,   UDim2.new(0.86,0,0.61,0), Color3.fromRGB(0,120,200), "↓")
@@ -241,12 +214,10 @@ local floorConnection
 
 -- Fast Attack / Kill Aura
 local fastAtkConn, kaConn
-local fastAtkRate = FAST_ATK_RATE_HZ
+local fastAtkRate   = FAST_ATK_RATE_HZ
 local killAuraRange = KA_RANGE_DEFAULT
-local lastAttackTime = 0
-
--- Visual KA
-local kaRingPart
+local lastAttackTime= 0
+local kaRingPart    = nil
 
 --==================================================
 -- HUD DE REGISTRO (movible)
@@ -261,8 +232,7 @@ hudFrame.Visible                = false
 hudFrame.Active                 = true
 hudFrame.ZIndex                 = 102
 Instance.new("UICorner", hudFrame).CornerRadius = UDim.new(0,10)
-applyStroke(hudFrame, 1.6, Color3.fromRGB(70,90,140), 0.35)
-addShadow(hudFrame,10)
+applyStroke(hudFrame, 1.4, Color3.fromRGB(70,90,140), 0.35)
 
 local hudTitle = Instance.new("TextLabel", hudFrame)
 hudTitle.Size                   = UDim2.new(1, -60, 0, 20)
@@ -311,8 +281,8 @@ hudList.SortOrder = Enum.SortOrder.LayoutOrder
 hudList.Padding   = UDim.new(0,4)
 
 local function updateCanvas()
-    hudScroll.CanvasSize = UDim2.new(0,0,0, hudList.AbsoluteContentSize.Y + 8)
-    hudScroll.CanvasPosition = Vector2.new(0, math.max(0, hudList.AbsoluteContentSize.Y - hudScroll.AbsoluteSize.Y))
+    hudScroll.CanvasSize    = UDim2.new(0,0,0, hudList.AbsoluteContentSize.Y + 8)
+    hudScroll.CanvasPosition= Vector2.new(0, math.max(0, hudList.AbsoluteContentSize.Y - hudScroll.AbsoluteSize.Y))
 end
 hudList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateCanvas)
 
@@ -368,9 +338,9 @@ local function logEvent(msg)
 end
 
 hudClose.MouseButton1Click:Connect(function()
-    hudEnabled = false
+    hudEnabled       = false
     hudFrame.Visible = false
-    hudToggleBtn.Text = "HUD OFF"
+    hudToggleBtn.Text= "HUD OFF"
     logEvent("HUD oculto")
 end)
 hudClear.MouseButton1Click:Connect(function()
@@ -379,7 +349,7 @@ hudClear.MouseButton1Click:Connect(function()
 end)
 
 --==================================================
--- BOTÓN RÁPIDO DE LOCK (movible)
+-- QUICK LOCK BUTTON (movible)
 --==================================================
 local quickLockBtn = Instance.new("TextButton", screenGui)
 quickLockBtn.Size             = UDim2.new(0,70,0,70)
@@ -392,12 +362,12 @@ quickLockBtn.Text             = "LOCK"
 quickLockBtn.BorderSizePixel  = 0
 quickLockBtn.Visible          = false
 quickLockBtn.ZIndex           = 101
-applyGradient(quickLockBtn, Color3.fromRGB(120,200,255), Color3.fromRGB(90,150,200))
-applyStroke(quickLockBtn,1.6,Color3.fromRGB(245,245,255),0.12)
 Instance.new("UICorner", quickLockBtn).CornerRadius = UDim.new(0.5,0)
+applyStroke(quickLockBtn, 1.4, Color3.fromRGB(245,245,255), 0.12)
+applySoftGradient(quickLockBtn, quickLockBtn.BackgroundColor3)
 
 --==================================================
--- UTILIDADES: ARRASTRE (estable)
+-- ARRASTRE (el que ya funcionaba)
 --==================================================
 local draggingFlag, startPosInput, startPosGui
 local function beginDrag(input, gui)
@@ -414,7 +384,7 @@ local function updateDrag(input, gui)
     if not draggingFlag then return end
     if input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then return end
     local delta = input.Position - startPosInput
-    local newPos= UDim2.new(startPosGui.X.Scale,startPosGui.X.Offset+delta.X,startPosGui.Y.Scale,startPosGui.Y.Offset+delta.Y)
+    local newPos= UDim2.new(startPosGui.X.Scale, startPosGui.X.Offset + delta.X, startPosGui.Y.Scale, startPosGui.Y.Offset + delta.Y)
     local cam      = Workspace.CurrentCamera
     local viewport = cam and cam.ViewportSize or Vector2.new(800,600)
     local guiSize  = gui.AbsoluteSize
@@ -428,7 +398,6 @@ local function makeDraggable(gui)
     gui.InputChanged:Connect(function(input) updateDrag(input, gui) end)
 end
 
--- Draggables
 makeDraggable(dragFrame)
 makeDraggable(openBtn)
 makeDraggable(menuFrame)
@@ -568,13 +537,13 @@ local function disableSpeed()
 end
 
 --==================================================
--- LOCK-ON (rápido)
+-- LOCK-ON rápido (suavizado)
 --==================================================
 local function findTarget()
     local cam = Workspace.CurrentCamera
     if not cam then return nil end
-    local camPos   = cam.CFrame.Position
-    local camDir   = cam.CFrame.LookVector
+    local camPos = cam.CFrame.Position
+    local camDir = cam.CFrame.LookVector
     local bestTarget, bestDot = nil, LOCK_DOT_THRESHOLD
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= localPlayer then
@@ -584,11 +553,11 @@ local function findTarget()
                 local vec  = root.Position - camPos
                 local dist = vec.Magnitude
                 if dist < LOCK_RANGE then
-                    local dir  = vec / dist
-                    local dot  = dir:Dot(camDir)
+                    local dir = vec / dist
+                    local dot = dir:Dot(camDir)
                     if dot > bestDot then
-                        bestDot   = dot
-                        bestTarget= char
+                        bestDot    = dot
+                        bestTarget = char
                     end
                 end
             end
@@ -598,14 +567,13 @@ local function findTarget()
 end
 local function startLock()
     if lockConnection then lockConnection:Disconnect() lockConnection = nil end
-    local t = select(1, findTarget())
-    targetCharacter = t
+    targetCharacter = select(1, findTarget())
     if not targetCharacter then
         logEvent("Lock: sin objetivo")
         return
     end
     lockActive = true
-    lastGoodDotTime = time()
+    lastGoodDotTime = tick()
     quickLockBtn.BackgroundColor3 = Color3.fromRGB(160,120,255)
     logEvent("Lock: ON → " .. (targetCharacter.Name or "objetivo"))
     lockConnection = RunService.RenderStepped:Connect(function(dt)
@@ -629,12 +597,12 @@ local function startLock()
             local dotNow    = dir:Dot(cam.CFrame.LookVector)
 
             if dist <= LOCK_RANGE and dotNow >= LOCK_DOT_THRESHOLD then
-                lastGoodDotTime = time()
-            elseif (time() - lastGoodDotTime) > LOCK_LOSS_GRACE then
+                lastGoodDotTime = tick()
+            elseif (tick() - lastGoodDotTime) > LOCK_LOSS_GRACE then
                 local newT = select(1, findTarget())
                 if newT then
                     targetCharacter = newT
-                    lastGoodDotTime = time()
+                    lastGoodDotTime = tick()
                     logEvent("Lock: objetivo cambiado → " .. (targetCharacter.Name or "?"))
                 else
                     if lockConnection then lockConnection:Disconnect() lockConnection = nil end
@@ -713,7 +681,7 @@ local function stopNoclip()
 end
 
 --==================================================
--- ANTI-HIT (respeta saltos y ↑/↓)
+-- ANTI-HIT
 --==================================================
 local function enableAntiHit()
     local char = localPlayer.Character
@@ -779,32 +747,31 @@ end
 --==================================================
 local function enableKnockback()
     local char = localPlayer.Character
-    if char then
-        local root = char:FindFirstChild("HumanoidRootPart")
-        for _,part in ipairs(char:GetDescendants()) do
-            if part:IsA("BasePart") then
-                local conn = part.Touched:Connect(function(hit)
-                    if not knockbackEnabled then return end
-                    local otherChar = hit:FindFirstAncestorOfClass("Model")
-                    if otherChar and otherChar ~= char then
-                        local otherHum = otherChar:FindFirstChildOfClass("Humanoid")
-                        if otherHum and otherHum.Health > 0 then
-                            local otherRoot = otherChar:FindFirstChild("HumanoidRootPart")
-                            if otherRoot and root then
-                                local dir = otherRoot.Position - root.Position
-                                if dir.Magnitude > 0 then dir = dir.Unit else dir = Vector3.new() end
-                                local bv = Instance.new("BodyVelocity")
-                                bv.MaxForce = Vector3.new(1e5,1e5,1e5)
-                                bv.P        = 1e4
-                                bv.Velocity = dir * knockbackPower + Vector3.new(0, upwardPower, 0)
-                                bv.Parent   = otherRoot
-                                Debris:AddItem(bv, 0.3)
-                            end
+    if not char then return end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    for _,part in ipairs(char:GetDescendants()) do
+        if part:IsA("BasePart") then
+            local conn = part.Touched:Connect(function(hit)
+                if not knockbackEnabled then return end
+                local otherChar = hit:FindFirstAncestorOfClass("Model")
+                if otherChar and otherChar ~= char then
+                    local otherHum = otherChar:FindFirstChildOfClass("Humanoid")
+                    if otherHum and otherHum.Health > 0 then
+                        local otherRoot = otherChar:FindFirstChild("HumanoidRootPart")
+                        if otherRoot and root then
+                            local dir = otherRoot.Position - root.Position
+                            if dir.Magnitude > 0 then dir = dir.Unit else dir = Vector3.new() end
+                            local bv = Instance.new("BodyVelocity")
+                            bv.MaxForce = Vector3.new(1e5,1e5,1e5)
+                            bv.P        = 1e4
+                            bv.Velocity = dir * knockbackPower + Vector3.new(0, upwardPower, 0)
+                            bv.Parent   = otherRoot
+                            Debris:AddItem(bv, 0.3)
                         end
                     end
-                end)
-                knockbackConnections[part] = conn
-            end
+                end
+            end)
+            knockbackConnections[part] = conn
         end
     end
 end
@@ -816,7 +783,7 @@ local function disableKnockback()
 end
 
 --==================================================
--- FLOOR (placas bajo el jugador, 2s)
+-- FLOOR
 --==================================================
 local function spawnFloorPlate()
     local char = localPlayer.Character
@@ -840,7 +807,7 @@ local function disableFloor()
 end
 
 --==================================================
--- FAST ATTACK (Golpe Rápido) y KILL AURA
+-- FAST ATTACK y KILL AURA
 --==================================================
 local function getEquippedTool()
     local char = localPlayer.Character
@@ -856,7 +823,7 @@ end
 local function tryAttackNow()
     local tool = getEquippedTool()
     if not tool or not tool.Activate then return false end
-    local now = time()
+    local now = tick()
     local gap = 1 / math.max(2, fastAtkRate)
     if now - lastAttackTime >= gap then
         tool:Activate()
@@ -869,9 +836,7 @@ end
 local function startFastAttack()
     if fastAtkConn then fastAtkConn:Disconnect() fastAtkConn = nil end
     fastAtkConn = RunService.Heartbeat:Connect(function()
-        if fastAtkEnabled then
-            tryAttackNow()
-        end
+        if fastAtkEnabled then tryAttackNow() end
     end)
 end
 local function stopFastAttack()
@@ -880,22 +845,19 @@ end
 
 local function ensureKARing()
     if kaRingPart then return end
-    kaRingPart = Instance.new("Part")
-    kaRingPart.Anchored = true
-    kaRingPart.CanCollide = false
-    kaRingPart.Material = Enum.Material.Neon
-    kaRingPart.Color = Color3.fromRGB(170,120,255)
-    kaRingPart.Transparency = 0.6
-    kaRingPart.Shape = Enum.PartType.Cylinder
-    kaRingPart.Name = "KA_Ring"
-    kaRingPart.Parent = workspace
+    local p = Instance.new("Part")
+    p.Anchored    = true
+    p.CanCollide  = false
+    p.Material    = Enum.Material.Neon
+    p.Color       = Color3.fromRGB(170,120,255)
+    p.Transparency= 0.6
+    p.Shape       = Enum.PartType.Cylinder
+    p.Name        = "KA_Ring"
+    p.Parent      = workspace
+    kaRingPart    = p
 end
-
 local function removeKARing()
-    if kaRingPart then
-        kaRingPart:Destroy()
-        kaRingPart = nil
-    end
+    if kaRingPart then kaRingPart:Destroy() kaRingPart = nil end
 end
 
 local function getNearestEnemyInRange(range)
@@ -914,7 +876,7 @@ local function getNearestEnemyInRange(range)
                     local d = (root.Position - hrp.Position).Magnitude
                     if d <= bestDist then
                         bestDist = d
-                        nearest = root
+                        nearest  = root
                     end
                 end
             end
@@ -926,18 +888,17 @@ end
 local function startKillAura()
     if kaConn then kaConn:Disconnect() kaConn = nil end
     ensureKARing()
-    kaConn = RunService.RenderStepped:Connect(function(dt)
+    kaConn = RunService.RenderStepped:Connect(function()
         if not killAuraEnabled then return end
         local char = localPlayer.Character
         local hrp  = char and char:FindFirstChild("HumanoidRootPart")
         local hum  = char and char:FindFirstChildOfClass("Humanoid")
         if not (hrp and hum) then return end
 
-        -- Visual ring
+        -- Anillo visual (cilindro tumbado)
         if kaRingPart then
-            kaRingPart.Size = Vector3.new( killAuraRange*2 , 0.2, killAuraRange*2 )
-            -- cilindro acostado
-            kaRingPart.CFrame = CFrame.new(hrp.Position) * CFrame.Angles(math.rad(90), 0, 0)
+            kaRingPart.Size   = Vector3.new(killAuraRange*2, 0.2, killAuraRange*2)
+            kaRingPart.CFrame = CFrame.new(hrp.Position) * CFrame.Angles(math.rad(90),0,0)
         end
 
         local targetRoot = getNearestEnemyInRange(killAuraRange)
@@ -946,8 +907,7 @@ local function startKillAura()
                 local myPos  = hrp.Position
                 local tgtPos = targetRoot.Position
                 local look   = CFrame.new(myPos, Vector3.new(tgtPos.X, myPos.Y, tgtPos.Z))
-                -- rotamos solo yaw suavemente
-                hrp.CFrame = hrp.CFrame:Lerp(look, 0.35)
+                hrp.CFrame   = hrp.CFrame:Lerp(look, 0.35)
             end
             tryAttackNow()
         end
@@ -959,11 +919,11 @@ local function stopKillAura()
 end
 
 --==================================================
--- PANEL DE AJUSTES (sliders) — movible
+-- PANEL DE AJUSTES (sliders)
 --==================================================
 local settingsFrame = Instance.new("Frame", screenGui)
 settingsFrame.Name                   = "SettingsPanel"
-settingsFrame.Size                   = UDim2.new(0,280,0,300)
+settingsFrame.Size                   = UDim2.new(0,280,0,364)
 settingsFrame.Position               = UDim2.new(0.30, -140, 0.52, -120)
 settingsFrame.BackgroundColor3       = Color3.fromRGB(18,18,24)
 settingsFrame.Visible                = false
@@ -971,8 +931,7 @@ settingsFrame.Active                 = true
 settingsFrame.ZIndex                 = 110
 Instance.new("UICorner", settingsFrame).CornerRadius = UDim.new(0,10)
 applyStroke(settingsFrame, 2, Color3.fromRGB(60,70,100), 0.35)
-applyGradient(settingsFrame, Color3.fromRGB(22,22,32), Color3.fromRGB(17,17,26))
-addShadow(settingsFrame,10)
+applySoftGradient(settingsFrame, Color3.fromRGB(22,22,32))
 makeDraggable(settingsFrame)
 
 local setTitle = Instance.new("TextLabel", settingsFrame)
@@ -1034,7 +993,7 @@ local function createSlider(parent, y, labelText, minVal, maxVal, defaultVal, de
     bar.BorderSizePixel = 0
     bar.ZIndex = 111
     Instance.new("UICorner", bar).CornerRadius = UDim.new(0,4)
-    applyStroke(bar,1.2,accentColor,0.35)
+    applyStroke(bar,1.1,accentColor,0.35)
 
     local fill = Instance.new("Frame", bar)
     fill.Size = UDim2.new(0,0,1,0)
@@ -1056,8 +1015,8 @@ local function createSlider(parent, y, labelText, minVal, maxVal, defaultVal, de
     local function setVisualByValue(v)
         local t = (v - minVal) / (maxVal - minVal)
         t = math.clamp(t,0,1)
-        fill.Size = UDim2.new(t,0,1,0)
-        knob.Position = UDim2.new(t, -9, 0, 23)
+        fill.Size      = UDim2.new(t,0,1,0)
+        knob.Position  = UDim2.new(t, -9, 0, 23)
         if decimals == 0 then
             valueLbl.Text = string.format("%d", math.floor(v + 0.5))
         else
@@ -1098,16 +1057,12 @@ local function createSlider(parent, y, labelText, minVal, maxVal, defaultVal, de
 end
 
 -- Sliders
-local walkSlider    = createSlider(settingsFrame,  36, "Walk Speed",    10, WALK_MAX_SPEED,  32, 0, Color3.fromRGB(255,165,0))
-local noclipSlider  = createSlider(settingsFrame,  92, "Noclip Speed",  10, NOCLIP_MAX_SPEED, NOCLIP_DEFAULT_SPEED, 0, Color3.fromRGB(255,99,71))
-local dotSlider     = createSlider(settingsFrame, 148, "Lock Dot",      0.70, 0.98, LOCK_DOT_THRESHOLD, 2, Color3.fromRGB(120,200,255))
-local rangeSlider   = createSlider(settingsFrame, 204, "Lock Range",    100, 300, LOCK_RANGE, 0, Color3.fromRGB(120,200,255))
-local fastAtkSlider = createSlider(settingsFrame, 260, "Fast Attack Hz", 2, 25, FAST_ATK_RATE_HZ, 0, Color3.fromRGB(255,215,0))
--- (Kill Aura Range slider se controla desde Ajustes de KA en HUD secundario? Usaremos el propio valor de KA_RANGE_DEFAULT vía botones +/- no; mejor usar el mismo de "Lock Range"? No. Mantenemos slider dentro de KA al activarlo.)
--- Para simplificar, reutilizamos "Lock Range" para Lock; y KA usa su propio valor "killAuraRange" abajo (ajustable con botones +/- KA si se quiere).
--- Para no romper UI, dejamos el slider de KA separado simple:
--- (Añadimos un mini cuadro arriba del menú para ajustar KA Range con toques +/-, pero para mantener 1 bloque, haremos ajuste rápido con mantener pulsado KAToggle: no. Mejor directo aquí también:)
--- Como ya estamos al tope vertical, dejamos KA Range fijo en default, pero ajustable vía código (killAuraRange variable). Si quieres slider dedicado, avísame y lo añado.
+local walkSlider     = createSlider(settingsFrame,  36, "Walk Speed",     10, WALK_MAX_SPEED,  32, 0, Color3.fromRGB(255,165,0))
+local noclipSlider   = createSlider(settingsFrame,  92, "Noclip Speed",   10, NOCLIP_MAX_SPEED, NOCLIP_DEFAULT_SPEED, 0, Color3.fromRGB(255,99,71))
+local dotSlider      = createSlider(settingsFrame, 148, "Lock Dot",       0.70, 0.98, LOCK_DOT_THRESHOLD, 2, Color3.fromRGB(120,200,255))
+local rangeSlider    = createSlider(settingsFrame, 204, "Lock Range",     100, 300, LOCK_RANGE, 0, Color3.fromRGB(120,200,255))
+local fastAtkSlider  = createSlider(settingsFrame, 260, "Fast Attack Hz", 2, 25, FAST_ATK_RATE_HZ, 0, Color3.fromRGB(255,215,0))
+local kaRangeSlider  = createSlider(settingsFrame, 316, "Kill Aura Range",8, 40, KA_RANGE_DEFAULT, 0, Color3.fromRGB(170,120,255))
 
 local function applySettings(fromWhere)
     local ws   = walkSlider.get()
@@ -1115,6 +1070,7 @@ local function applySettings(fromWhere)
     local dot  = dotSlider.get()
     local rng  = rangeSlider.get()
     local hz   = fastAtkSlider.get()
+    local kar  = kaRangeSlider.get()
 
     if speedEnabled then
         local char = localPlayer.Character
@@ -1127,16 +1083,14 @@ local function applySettings(fromWhere)
         end
     end
 
-    noclipSpeed = math.clamp(ncs, 10, NOCLIP_MAX_SPEED)
-    if noclipEnabled then
-        logEvent(("Noclip Speed set → %d (%s)"):format(noclipSpeed, fromWhere or "Ajustes"))
-    end
-
+    noclipSpeed      = math.clamp(ncs, 10, NOCLIP_MAX_SPEED)
     LOCK_DOT_THRESHOLD = math.clamp(dot, 0.70, 0.98)
     LOCK_RANGE         = math.clamp(rng, 100, 300)
     fastAtkRate        = math.clamp(hz, 2, 25)
-    logEvent(("Lock ajustes: dot=%.2f, range=%d"):format(LOCK_DOT_THRESHOLD, LOCK_RANGE))
-    logEvent(("Fast Attack Hz: %d"):format(fastAtkRate))
+    killAuraRange      = math.clamp(kar, 8, 40)
+
+    logEvent(("Lock: dot=%.2f range=%d"):format(LOCK_DOT_THRESHOLD, LOCK_RANGE))
+    logEvent(("Fast Attack Hz: %d  |  KA range: %d"):format(fastAtkRate, killAuraRange))
 end
 
 setClose.MouseButton1Click:Connect(function()
@@ -1160,8 +1114,8 @@ localPlayer.CharacterAdded:Connect(function()
     if floorEnabled    then enableFloor() end
     if fastAtkEnabled  then startFastAttack() end
     if killAuraEnabled then startKillAura() end
-    if lockBtnVisible then quickLockBtn.Visible = true end
-    if lockActive then startLock() end
+    if lockBtnVisible  then quickLockBtn.Visible = true end
+    if lockActive      then startLock() end
 end)
 
 --==================================================
@@ -1222,12 +1176,10 @@ speedToggleBtn.MouseButton1Click:Connect(function()
 end)
 
 lockToggleBtn.MouseButton1Click:Connect(function()
-    lockBtnVisible = not lockBtnVisible
-    quickLockBtn.Visible = lockBtnVisible
-    lockToggleBtn.Text = lockBtnVisible and "Lock Btn ON" or "Lock Btn OFF"
-    if not lockBtnVisible and lockActive then
-        stopLock()
-    end
+    lockBtnVisible        = not lockBtnVisible
+    quickLockBtn.Visible  = lockBtnVisible
+    lockToggleBtn.Text    = lockBtnVisible and "Lock Btn ON" or "Lock Btn OFF"
+    if not lockBtnVisible and lockActive then stopLock() end
     logEvent("Lock Button: " .. (lockBtnVisible and "VISIBLE" or "OCULTO"))
 end)
 
@@ -1289,38 +1241,28 @@ floorToggleBtn.MouseButton1Click:Connect(function()
 end)
 
 hudToggleBtn.MouseButton1Click:Connect(function()
-    hudEnabled = not hudEnabled
+    hudEnabled       = not hudEnabled
     hudFrame.Visible = hudEnabled
-    hudToggleBtn.Text = hudEnabled and "HUD ON" or "HUD OFF"
+    hudToggleBtn.Text= hudEnabled and "HUD ON" or "HUD OFF"
     if hudEnabled then logEvent("HUD visible") end
 end)
 
 fastAtkToggleBtn.MouseButton1Click:Connect(function()
     fastAtkEnabled = not fastAtkEnabled
     fastAtkToggleBtn.Text = fastAtkEnabled and "Golpe Rápido ON" or "Golpe Rápido OFF"
-    if fastAtkEnabled then
-        startFastAttack()
-        logEvent(("Golpe Rápido: ON (%d Hz)"):format(fastAtkRate))
-    else
-        stopFastAttack()
-        logEvent("Golpe Rápido: OFF")
-    end
+    if fastAtkEnabled then startFastAttack() logEvent(("Golpe Rápido: ON (%d Hz)"):format(fastAtkRate))
+    else stopFastAttack() logEvent("Golpe Rápido: OFF") end
 end)
 
 kaToggleBtn.MouseButton1Click:Connect(function()
     killAuraEnabled = not killAuraEnabled
-    kaToggleBtn.Text = killAuraEnabled and "Kill Aura ON" or "Kill Aura OFF"
-    if killAuraEnabled then
-        startKillAura()
-        logEvent(("Kill Aura: ON (r=%dstuds)"):format(killAuraRange))
-    else
-        stopKillAura()
-        logEvent("Kill Aura: OFF")
-    end
+    kaToggleBtn.Text= killAuraEnabled and "Kill Aura ON" or "Kill Aura OFF"
+    if killAuraEnabled then startKillAura() logEvent(("Kill Aura: ON (r=%d)"):format(killAuraRange))
+    else stopKillAura() logEvent("Kill Aura: OFF") end
 end)
 
 --==================================================
--- CLICS DIRECTOS (abrir/cerrar) y LOCK rápido
+-- CLICS (abrir/cerrar) y LOCK rápido
 --==================================================
 openBtn.MouseButton1Click:Connect(function()
     dragFrame.Visible = false
@@ -1377,4 +1319,4 @@ ascendBtn.MouseButton1Up:Connect(function()   ascend = false end)
 descendBtn.MouseButton1Down:Connect(function() descend = true end)
 descendBtn.MouseButton1Up:Connect(function()   descend = false end)
 
-print("✅ Script cargado (UI mejorada + Golpe Rápido + Kill Aura)")
+print("✅ Script cargado (UI ligera estable + FastAttack + KillAura)")
