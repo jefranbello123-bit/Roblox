@@ -1,6 +1,5 @@
--- Script completo: Fly, ESP, Speed, Lock-On, Noclip, Anti-Hit mejorado y Knockback
--- Coloca este LocalScript en StarterPlayerScripts o StarterGui.
--- Usa estas funciones sólo en tus propios juegos o para pruebas personales.
+-- Script completo con Fly, ESP, Speed, Lock-On, Noclip, Anti-Hit mejorado y Knockback
+-- Colócalo como LocalScript en StarterPlayerScripts o StarterGui.
 
 local Players    = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -43,7 +42,6 @@ menuFrame.Position          = UDim2.new(0.5,-130,0.5,-140)
 menuFrame.BackgroundColor3  = Color3.fromRGB(20,20,20)
 menuFrame.Visible           = false
 menuFrame.Active            = true
-menuFrame.ClipsDescendants  = false
 menuFrame.ZIndex            = 100
 Instance.new("UICorner", menuFrame).CornerRadius = UDim.new(0,8)
 
@@ -70,7 +68,7 @@ closeBtn.BorderSizePixel  = 0
 closeBtn.ZIndex           = 101
 Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0.5,0)
 
--- Helper para botones del menú
+-- Helper para botones
 local function createToggleButton(name,text,pos,color)
     local btn = Instance.new("TextButton", menuFrame)
     btn.Name             = name
@@ -86,16 +84,16 @@ local function createToggleButton(name,text,pos,color)
     return btn
 end
 
--- Crear botones para todas las funciones
+-- Botones para cada función
 local flyToggleBtn     = createToggleButton("FlyToggle",    "Fly OFF",      UDim2.new(0,10,0,40),  Color3.fromRGB(220,45,45))
 local espToggleBtn     = createToggleButton("ESPToggle",    "ESP OFF",      UDim2.new(0,130,0,40), Color3.fromRGB(45,140,220))
 local speedToggleBtn   = createToggleButton("SpeedToggle",  "Speed OFF",    UDim2.new(0,10,0,90),  Color3.fromRGB(45,220,120))
 local lockToggleBtn    = createToggleButton("LockToggle",   "Lock OFF",     UDim2.new(0,130,0,90), Color3.fromRGB(140,120,220))
 local noclipToggleBtn  = createToggleButton("NoclipToggle", "Noclip OFF",   UDim2.new(0,10,0,140), Color3.fromRGB(220,90,45))
 local antiHitToggleBtn = createToggleButton("AntiHitToggle","Anti-Hit OFF", UDim2.new(0,130,0,140),Color3.fromRGB(120,120,120))
-local knockbackToggleBtn = createToggleButton("KnockbackToggle","Knockback OFF",UDim2.new(0,10,0,190),Color3.fromRGB(200,100,220))
+local knockToggleBtn   = createToggleButton("KnockToggle",  "Knockback OFF",UDim2.new(0,10,0,190), Color3.fromRGB(200,100,220))
 
--- Botones laterales de ascenso y velocidad
+-- Botones laterales
 local ascendBtn, descendBtn, speedUpBtn, speedDownBtn = Instance.new("TextButton"), Instance.new("TextButton"), Instance.new("TextButton"), Instance.new("TextButton")
 ascendBtn.Parent, descendBtn.Parent, speedUpBtn.Parent, speedDownBtn.Parent = screenGui, screenGui, screenGui, screenGui
 ascendBtn.Size             = UDim2.new(0,50,0,50)
@@ -142,7 +140,7 @@ speedDownBtn.BorderSizePixel  = 0
 speedDownBtn.Visible          = false
 speedDownBtn.ZIndex           = 101
 
--- Variables de estado
+-- Estado y variables
 local flying, espEnabled, speedEnabled, noclipEnabled, lockEnabled, antiHitEnabled, knockbackEnabled = false, false, false, false, false, false, false
 local ascend, descend = false, false
 local bodyGyro, bodyVel, flyConnection
@@ -151,16 +149,15 @@ local espConnections    = {}
 local espGlobalConnection
 local originalWalkSpeed, currentSpeed, speedConnection
 local speedIncrement, maxSpeed = 4, 100
-local speedTarget = nil
+local speedTarget
 local noclipSpeed = 50
 local noclipBodyGyro, noclipBodyVel, noclipConnection, noclipCollisionConn
 local targetCharacter, lockConnection
 local antiDamageConn, platformConn, stateConn, antiKnockConn
 local knockbackConnections = {}
-local knockbackPower  = 100
-local upwardPower     = 50
+local knockbackPower, upwardPower = 100, 50
 
--- Mantenimiento de velocidad para Speed
+-- Mantenimiento de velocidad
 local function maintainSpeed()
     if speedConnection then speedConnection:Disconnect() end
     speedConnection = RunService.Heartbeat:Connect(function()
@@ -172,7 +169,7 @@ local function maintainSpeed()
     end)
 end
 
--- Colisiones para Noclip
+-- Colisiones para noclip
 local function setCharacterCollision(enabled)
     local char = localPlayer.Character
     if not char then return end
@@ -337,9 +334,9 @@ local function enableSpeed()
         local hum = char:FindFirstChildOfClass("Humanoid")
         if hum then
             originalWalkSpeed = originalWalkSpeed or hum.WalkSpeed
-            currentSpeed      = math.max(hum.WalkSpeed*2, originalWalkSpeed)
+            currentSpeed      = math.max(hum.WalkSpeed * 2, originalWalkSpeed)
             if currentSpeed > maxSpeed then currentSpeed = maxSpeed end
-            hum.WalkSpeed = currentSpeed
+            hum.WalkSpeed     = currentSpeed
             speedUpBtn.Visible   = true
             speedDownBtn.Visible = true
             maintainSpeed()
@@ -377,7 +374,7 @@ local function findTarget()
                 local vec  = root.Position - camPos
                 local dist = vec.Magnitude
                 if dist < 200 then
-                    local dir  = vec/dist
+                    local dir  = vec / dist
                     local dot  = dir:Dot(camDir)
                     if dot > bestDot then
                         bestDot   = dot
@@ -416,7 +413,7 @@ local function stopLock()
     targetCharacter = nil
 end
 
--- Anti-Hit mejorado
+-- Anti-Hit con control vertical
 local function enableAntiHit()
     antiHitEnabled = true
     local char = localPlayer.Character
@@ -450,7 +447,7 @@ local function enableAntiHit()
         antiKnockConn = RunService.Heartbeat:Connect(function()
             if not antiHitEnabled then return end
             local char = localPlayer.Character
-            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            local hum  = char and char:FindFirstChildOfClass("Humanoid")
             local root = char and char:FindFirstChild("HumanoidRootPart")
             if hum and root then
                 local move = hum.MoveDirection
@@ -459,7 +456,15 @@ local function enableAntiHit()
                     desired = desired.Unit * (noclipEnabled and noclipSpeed or hum.WalkSpeed)
                 end
                 local currentVel = root.AssemblyLinearVelocity
-                root.AssemblyLinearVelocity = Vector3.new(desired.X, currentVel.Y, desired.Z)
+                -- Si no estamos saltando y no pulsamos ascenso/descenso, cancelar la velocidad vertical
+                local yVel = currentVel.Y
+                local state = hum:GetState()
+                if state ~= Enum.HumanoidStateType.Jumping 
+                and state ~= Enum.HumanoidStateType.Freefall
+                and not ascend and not descend then
+                    yVel = 0
+                end
+                root.AssemblyLinearVelocity = Vector3.new(desired.X, yVel, desired.Z)
             end
         end)
     end
@@ -473,7 +478,7 @@ local function disableAntiHit()
     if antiKnockConn then antiKnockConn:Disconnect() antiKnockConn = nil end
 end
 
--- Knockback: aplica empuje a otros jugadores al tocarlos
+-- Knockback
 local function enableKnockback()
     knockbackEnabled = true
     local char = localPlayer.Character
@@ -519,7 +524,7 @@ local function disableKnockback()
     end
 end
 
--- Reconectar Knockback al reaparecer
+-- Reconectar funcionalidades al reaparecer
 localPlayer.CharacterAdded:Connect(function()
     if knockbackEnabled then
         disableKnockback()
@@ -533,7 +538,7 @@ localPlayer.CharacterAdded:Connect(function()
     end
 end)
 
--- Conexión para eventos al pulsar botones
+-- Conectar botones
 flyToggleBtn.MouseButton1Click:Connect(function()
     flying = not flying
     flyToggleBtn.Text = flying and "Fly ON" or "Fly OFF"
@@ -627,17 +632,17 @@ antiHitToggleBtn.MouseButton1Click:Connect(function()
     end
 end)
 
-knockbackToggleBtn.MouseButton1Click:Connect(function()
+knockToggleBtn.MouseButton1Click:Connect(function()
     if knockbackEnabled then
         disableKnockback()
-        knockbackToggleBtn.Text = "Knockback OFF"
+        knockToggleBtn.Text = "Knockback OFF"
     else
         enableKnockback()
-        knockbackToggleBtn.Text = "Knockback ON"
+        knockToggleBtn.Text = "Knockback ON"
     end
 end)
 
--- Ajustar velocidad con flechas
+-- Ajuste de velocidad con flechas
 speedUpBtn.MouseButton1Click:Connect(function()
     if speedTarget == "walk" and speedEnabled then
         local char = localPlayer.Character
@@ -665,7 +670,7 @@ speedDownBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- Ascenso/descenso
+-- Controles de ascenso/descenso
 ascendBtn.MouseButton1Down:Connect(function() ascend = true end)
 ascendBtn.MouseButton1Up:Connect(function() ascend = false end)
 descendBtn.MouseButton1Down:Connect(function() descend = true end)
@@ -681,7 +686,7 @@ closeBtn.MouseButton1Click:Connect(function()
     dragFrame.Visible = true
 end)
 
--- Arrastrar el menú y el botón circular
+-- Arrastrar elementos
 local draggingFlag, startPosInput, startPosGui
 local function beginDrag(input, gui)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -717,4 +722,4 @@ makeDraggable(dragFrame)
 makeDraggable(menuFrame)
 makeDraggable(openBtn)
 
-print("✅ Fly, ESP, Speed, Lock, Noclip, Anti-Hit y Knockback cargados")
+print("✅ Script completo cargado con Fly, ESP, Speed, Lock, Noclip, Anti-Hit mejorado y Knockback")
