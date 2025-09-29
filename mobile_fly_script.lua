@@ -1,9 +1,9 @@
--- Fly, Speed, ESP, Lock-On, Noclip y Empty Server para móviles.
+-- Fly, Speed, ESP, Lock-On, Noclip y Anti‑Hit para móviles.
 -- Coloca este LocalScript en StarterPlayerScripts o StarterGui (PlayerGui).
+-- Úsalo sólo en tus propios juegos; abusar de estas funciones puede violar los Términos de Servicio de Roblox.
 
-local Players         = game:GetService("Players")
-local RunService      = game:GetService("RunService")
-local TeleportService = game:GetService("TeleportService")
+local Players    = game:GetService("Players")
+local RunService = game:GetService("RunService")
 
 local localPlayer = Players.LocalPlayer
 local playerGui   = localPlayer:WaitForChild("PlayerGui")
@@ -16,13 +16,13 @@ screenGui.IgnoreGuiInset = true
 screenGui.DisplayOrder   = 100
 screenGui.Parent         = playerGui
 
--- Botón circular
+-- Botón circular para abrir el menú
 local dragFrame = Instance.new("Frame", screenGui)
-dragFrame.Size     = UDim2.new(0,60,0,60)
-dragFrame.Position = UDim2.new(0.5,-30,0.5,-30)
+dragFrame.Size              = UDim2.new(0,60,0,60)
+dragFrame.Position          = UDim2.new(0.5,-30,0.5,-30)
 dragFrame.BackgroundTransparency = 1
-dragFrame.Active  = true
-dragFrame.ZIndex  = 100
+dragFrame.Active           = true
+dragFrame.ZIndex           = 100
 
 local openBtn = Instance.new("TextButton", dragFrame)
 openBtn.Size             = UDim2.new(1,0,1,0)
@@ -35,15 +35,15 @@ openBtn.BorderSizePixel  = 0
 openBtn.ZIndex           = 101
 Instance.new("UICorner", openBtn).CornerRadius = UDim.new(0.5,0)
 
--- Menú principal (dos columnas)
+-- Menú principal (dos columnas, tres filas)
 local menuFrame = Instance.new("Frame", screenGui)
-menuFrame.Size              = UDim2.new(0,260,0,230)
-menuFrame.Position          = UDim2.new(0.5,-130,0.5,-115)
-menuFrame.BackgroundColor3  = Color3.fromRGB(20,20,20)
-menuFrame.Visible           = false
-menuFrame.Active            = true
-menuFrame.ClipsDescendants  = false
-menuFrame.ZIndex            = 100
+menuFrame.Size             = UDim2.new(0,260,0,230)
+menuFrame.Position         = UDim2.new(0.5,-130,0.5,-115)
+menuFrame.BackgroundColor3 = Color3.fromRGB(20,20,20)
+menuFrame.Visible          = false
+menuFrame.Active           = true
+menuFrame.ClipsDescendants = false
+menuFrame.ZIndex           = 100
 Instance.new("UICorner", menuFrame).CornerRadius = UDim.new(0,8)
 
 local titleLabel = Instance.new("TextLabel", menuFrame)
@@ -69,7 +69,7 @@ closeBtn.BorderSizePixel  = 0
 closeBtn.ZIndex           = 101
 Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0.5,0)
 
--- Helper para crear botones en dos columnas
+-- Helper para botones del menú
 local function createToggleButton(name,text,pos,color)
     local btn = Instance.new("TextButton", menuFrame)
     btn.Name             = name
@@ -85,15 +85,15 @@ local function createToggleButton(name,text,pos,color)
     return btn
 end
 
--- Botones del menú (dos columnas, tres filas)
-local flyToggleBtn    = createToggleButton("FlyToggle",   "Fly OFF",   UDim2.new(0,10,0,40),  Color3.fromRGB(220,45,45))
-local espToggleBtn    = createToggleButton("ESPToggle",   "ESP OFF",   UDim2.new(0,130,0,40), Color3.fromRGB(45,140,220))
-local speedToggleBtn  = createToggleButton("SpeedToggle", "Speed OFF", UDim2.new(0,10,0,90), Color3.fromRGB(45,220,120))
-local lockToggleBtn   = createToggleButton("LockToggle",  "Lock OFF",  UDim2.new(0,130,0,90), Color3.fromRGB(140,120,220))
-local noclipToggleBtn = createToggleButton("NoclipToggle","Noclip OFF",UDim2.new(0,10,0,140),Color3.fromRGB(220,90,45))
-local emptyServerBtn  = createToggleButton("EmptyServer","Empty Server",UDim2.new(0,130,0,140),Color3.fromRGB(100,170,220))
+-- Botones principales (dos columnas, tres filas)
+local flyToggleBtn    = createToggleButton("FlyToggle",   "Fly OFF",    UDim2.new(0,10,0,40),  Color3.fromRGB(220,45,45))
+local espToggleBtn    = createToggleButton("ESPToggle",   "ESP OFF",    UDim2.new(0,130,0,40), Color3.fromRGB(45,140,220))
+local speedToggleBtn  = createToggleButton("SpeedToggle", "Speed OFF",  UDim2.new(0,10,0,90),  Color3.fromRGB(45,220,120))
+local lockToggleBtn   = createToggleButton("LockToggle",  "Lock OFF",   UDim2.new(0,130,0,90), Color3.fromRGB(140,120,220))
+local noclipToggleBtn = createToggleButton("NoclipToggle","Noclip OFF", UDim2.new(0,10,0,140), Color3.fromRGB(220,90,45))
+local antiHitToggleBtn= createToggleButton("AntiHitToggle","Anti-Hit OFF", UDim2.new(0,130,0,140), Color3.fromRGB(120,120,120))
 
--- Botones laterales (ascenso, descenso, velocidad)
+-- Botones laterales de ascenso y control de velocidad
 local ascendBtn = Instance.new("TextButton", screenGui)
 ascendBtn.Size             = UDim2.new(0,50,0,50)
 ascendBtn.Position         = UDim2.new(0.88,0,0.48,0)
@@ -142,37 +142,22 @@ speedDownBtn.BorderSizePixel  = 0
 speedDownBtn.Visible          = false
 speedDownBtn.ZIndex           = 101
 
--- Variables de estado
-local flying = false
-local bodyGyro, bodyVel, flyConnection
+-- Variables de estado y conexiones
+local flying, espEnabled, speedEnabled, noclipEnabled, lockEnabled, antiHitEnabled = false, false, false, false, false, false
 local ascend, descend = false, false
-
-local espEnabled     = false
-local currentHighlights = {}
-local espConnections = {}
+local bodyGyro, bodyVel, flyConnection
+local currentHighlights   = {}
+local espConnections      = {}
 local espGlobalConnection
+local originalWalkSpeed, currentSpeed, speedConnection
+local speedIncrement, maxSpeed = 4, 100
+local noclipSpeed = 50
+local noclipBodyGyro, noclipBodyVel, noclipConnection, noclipCollisionConn
+local speedTarget -- "walk" o "noclip" según modo
+local targetCharacter, lockConnection
+local antiDamageConn, antiKnockConn
 
-local speedEnabled   = false
-local originalWalkSpeed
-local currentSpeed
-local speedIncrement = 4
-local maxSpeed       = 100
-local speedConnection
-
-local noclipEnabled  = false
-local noclipSpeed    = 50
-local noclipBodyGyro
-local noclipBodyVel
-local noclipConnection
-local noclipCollisionConn
-
-local speedTarget    = nil -- "walk" o "noclip" según el modo activo
-
-local lockEnabled     = false
-local targetCharacter
-local lockConnection
-
--- Funciones de colisión
+-- Funciones auxiliares de colisión para noclip
 local function setCharacterCollision(enabled)
     local char = localPlayer.Character
     if not char then return end
@@ -363,7 +348,7 @@ local function disableSpeed()
     end
     originalWalkSpeed = nil
     currentSpeed      = nil
-    speedUpBtn.Visible = false
+    speedUpBtn.Visible   = false
     speedDownBtn.Visible = false
     if speedConnection then speedConnection:Disconnect() speedConnection = nil end
 end
@@ -422,6 +407,35 @@ local function stopLock()
     targetCharacter = nil
 end
 
+-- Anti-Hit: evita daño y knockback
+local function enableAntiHit()
+    antiHitEnabled = true
+    local char = localPlayer.Character
+    local hum  = char and char:FindFirstChildOfClass("Humanoid")
+    if hum and not antiDamageConn then
+        antiDamageConn = hum.HealthChanged:Connect(function(hp)
+            if antiHitEnabled and hum then
+                hum.Health = hum.MaxHealth
+            end
+        end)
+    end
+    if not antiKnockConn then
+        antiKnockConn = RunService.Heartbeat:Connect(function()
+            local root = localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if antiHitEnabled and root then
+                root.AssemblyLinearVelocity  = Vector3.new(0,0,0)
+                root.AssemblyAngularVelocity = Vector3.new(0,0,0)
+            end
+        end)
+    end
+end
+
+local function disableAntiHit()
+    antiHitEnabled = false
+    if antiDamageConn then antiDamageConn:Disconnect() antiDamageConn = nil end
+    if antiKnockConn  then antiKnockConn:Disconnect()  antiKnockConn  = nil end
+end
+
 -- Mantener la velocidad al reaparecer
 task.spawn(function()
     local function onCharacter(char)
@@ -437,12 +451,15 @@ task.spawn(function()
                 speedDownBtn.Visible = true
             end
         end
+        if antiHitEnabled then
+            enableAntiHit()
+        end
     end
     if localPlayer.Character then onCharacter(localPlayer.Character) end
     localPlayer.CharacterAdded:Connect(onCharacter)
 end)
 
--- Limpieza del ESP cuando un jugador abandona
+-- Limpieza del ESP al salir un jugador
 Players.PlayerRemoving:Connect(function(plr)
     if espConnections[plr] then
         espConnections[plr]:Disconnect()
@@ -454,7 +471,7 @@ Players.PlayerRemoving:Connect(function(plr)
     end
 end)
 
--- Acciones de los botones del menú
+-- Conexiones de botones del menú
 flyToggleBtn.MouseButton1Click:Connect(function()
     flying = not flying
     flyToggleBtn.Text = flying and "Fly ON" or "Fly OFF"
@@ -509,8 +526,8 @@ end)
 
 noclipToggleBtn.MouseButton1Click:Connect(function()
     if noclipEnabled then
-        noclipEnabled      = false
-        noclipToggleBtn.Text = "Noclip OFF"
+        noclipEnabled       = false
+        noclipToggleBtn.Text= "Noclip OFF"
         stopNoclip()
         if not speedEnabled then
             speedUpBtn.Visible   = false
@@ -523,8 +540,8 @@ noclipToggleBtn.MouseButton1Click:Connect(function()
         speedTarget = speedEnabled and "walk" or nil
     else
         noclipEnabled       = true
-        noclipToggleBtn.Text = "Noclip ON"
-        -- Desactivar Fly y Speed mientras se activa Noclip
+        noclipToggleBtn.Text= "Noclip ON"
+        -- apagar Fly y Speed si están activos
         if flying then
             flying            = false
             flyToggleBtn.Text = "Fly OFF"
@@ -545,20 +562,18 @@ noclipToggleBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- Botón para unirse a un servidor vacío
-emptyServerBtn.MouseButton1Click:Connect(function()
-    -- Crear opciones de teletransporte para reservar un servidor nuevo
-    local options = Instance.new("TeleportOptions")
-    options.ShouldReserveServer = true
-    local success, err = pcall(function()
-        TeleportService:TeleportAsync(game.PlaceId, {localPlayer}, options)
-    end)
-    if not success then
-        warn("No se pudo teletransportar a un servidor vacío: " .. tostring(err))
+-- Activar/desactivar Anti-Hit
+antiHitToggleBtn.MouseButton1Click:Connect(function()
+    if antiHitEnabled then
+        disableAntiHit()
+        antiHitToggleBtn.Text = "Anti-Hit OFF"
+    else
+        enableAntiHit()
+        antiHitToggleBtn.Text = "Anti-Hit ON"
     end
 end)
 
--- Ajustar la velocidad con flechas
+-- Ajustar velocidades con flechas
 speedUpBtn.MouseButton1Click:Connect(function()
     if speedTarget == "walk" and speedEnabled then
         local char = localPlayer.Character
@@ -592,7 +607,7 @@ ascendBtn.MouseButton1Up:Connect(function() ascend = false end)
 descendBtn.MouseButton1Down:Connect(function() descend = true end)
 descendBtn.MouseButton1Up:Connect(function() descend = false end)
 
--- Mostrar/ocultar el menú principal
+-- Mostrar/ocultar el menú
 openBtn.MouseButton1Click:Connect(function()
     dragFrame.Visible = false
     menuFrame.Visible = true
@@ -602,7 +617,7 @@ closeBtn.MouseButton1Click:Connect(function()
     dragFrame.Visible = true
 end)
 
--- Arrastrar el menú y los botones
+-- Arrastrar elementos
 local draggingFlag, startPosInput, startPosGui
 local function beginDrag(input, gui)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -617,29 +632,25 @@ end
 local function updateDrag(input, gui)
     if draggingFlag and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
         local delta = input.Position - startPosInput
-        local newPos= UDim2.new(startPosGui.X.Scale, startPosGui.X.Offset + delta.X,
-                                 startPosGui.Y.Scale, startPosGui.Y.Offset + delta.Y)
+        local newPos= UDim2.new(startPosGui.X.Scale,startPosGui.X.Offset+delta.X,
+                                 startPosGui.Y.Scale,startPosGui.Y.Offset+delta.Y)
         local cam   = workspace.CurrentCamera
         local viewport = cam and cam.ViewportSize or Vector2.new(800,600)
         local guiSize  = gui.AbsoluteSize
         local maxX     = viewport.X - guiSize.X
         local maxY     = viewport.Y - guiSize.Y
-        local clampedX = math.clamp(newPos.X.Offset, 0, maxX)
-        local clampedY = math.clamp(newPos.Y.Offset, 0, maxY)
+        local clampedX = math.clamp(newPos.X.Offset,0,maxX)
+        local clampedY = math.clamp(newPos.Y.Offset,0,maxY)
         gui.Position   = UDim2.new(0,clampedX,0,clampedY)
     end
 end
 local function makeDraggable(gui)
-    gui.InputBegan:Connect(function(input)
-        beginDrag(input, gui)
-    end)
-    gui.InputChanged:Connect(function(input)
-        updateDrag(input, gui)
-    end)
+    gui.InputBegan:Connect(function(input) beginDrag(input, gui) end)
+    gui.InputChanged:Connect(function(input) updateDrag(input, gui) end)
 end
 
 makeDraggable(dragFrame)
 makeDraggable(menuFrame)
 makeDraggable(openBtn)
 
-print("✅ Fly, ESP, Speed, Lock, Noclip y Empty Server cargados")
+print("✅ Fly, ESP, Speed, Lock, Noclip y Anti‑Hit cargados")
