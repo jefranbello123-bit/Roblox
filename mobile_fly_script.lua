@@ -1,5 +1,5 @@
 -- Script completo: Fly, ESP, Speed, Lock Quick Button, Noclip, Anti-Hit, Knockback, Floor, HUD y Ajustes
--- ✅ FIX de arrastre para ☰ (abrir menú) y LOCK: ahora se arrastran suave, con "zona muerta" anti-click fantasma.
+-- ✅ FIX: El botón ☰ ahora abre el menú correctamente en tap. Nuevo handler de arrastre con deadzone grande + fallback click.
 -- Pensado para uso en tus propios juegos/pruebas. Respeta los Términos de Roblox.
 
 --==================================================
@@ -318,7 +318,7 @@ quickLockBtn.Active           = true
 Instance.new("UICorner", quickLockBtn).CornerRadius = UDim.new(0.5,0)
 
 --==================================================
--- UTILIDADES DE ARRASTRE (con “zona muerta” anti-click)
+-- UTILIDADES DE ARRASTRE / TAP
 --==================================================
 local function clampGuiToViewport(gui)
     local cam = Workspace.CurrentCamera
@@ -331,7 +331,7 @@ local function clampGuiToViewport(gui)
     gui.Position = UDim2.new(0,x,0,y)
 end
 
--- Arrastre simple para frames (menu, HUD, etc.) con estado por-instancia
+-- Arrastre libre (frames grandes)
 local function makeFreeDraggable(gui)
     local dragging, startPosGui, startPosInput = false, nil, nil
     gui.InputBegan:Connect(function(input)
@@ -355,46 +355,63 @@ local function makeFreeDraggable(gui)
     end)
 end
 
--- Arrastre para botones con click corto (no dispara click si se movió > deadzone)
+-- Arrastre para botones + detección de tap corto robusta
 local function makeDraggableButton(button, moveGui, onShortTap, deadzone)
-    deadzone = deadzone or 6
-    local dragging = false
-    local moved    = false
-    local startPosGui, startPosInput
+    deadzone = deadzone or 16 -- px
+    local dragging   = false
+    local moved      = false
+    local startGui   = nil
+    local startPos   = nil
+    local startTime  = 0
+    local currentInp = nil
+    local lastTapAt  = 0
 
     button.InputBegan:Connect(function(input)
         if input.UserInputType ~= Enum.UserInputType.Touch and input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
-        dragging      = true
-        moved         = false
-        startPosGui   = moveGui.Position
-        startPosInput = input.Position
+        dragging   = true
+        moved      = false
+        startGui   = moveGui.Position
+        startPos   = input.Position
+        startTime  = time()
+        currentInp = input
+    end)
 
-        -- Seguir ese mismo input hasta terminar
-        local moveConn, endConn
-        moveConn = UserInput.InputChanged:Connect(function(changed)
-            if not dragging then return end
-            if changed == input then
-                local delta = changed.Position - startPosInput
-                if math.abs(delta.X) > deadzone or math.abs(delta.Y) > deadzone then
-                    moved = true
-                end
-                moveGui.Position = UDim2.new(
-                    startPosGui.X.Scale, startPosGui.X.Offset + delta.X,
-                    startPosGui.Y.Scale, startPosGui.Y.Offset + delta.Y
-                )
-                clampGuiToViewport(moveGui)
+    UserInput.InputChanged:Connect(function(input)
+        if dragging and currentInp and input == currentInp then
+            local delta = input.Position - startPos
+            if math.abs(delta.X) > deadzone or math.abs(delta.Y) > deadzone then
+                moved = true
             end
-        end)
-        endConn = input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                dragging = false
-                if moveConn then moveConn:Disconnect() end
-                if endConn  then endConn:Disconnect()  end
-                if not moved and onShortTap then
+            moveGui.Position = UDim2.new(startGui.X.Scale, startGui.X.Offset + delta.X, startGui.Y.Scale, startGui.Y.Offset + delta.Y)
+            clampGuiToViewport(moveGui)
+        end
+    end)
+
+    UserInput.InputEnded:Connect(function(input)
+        if dragging and input == currentInp then
+            dragging = false
+            local duration = time() - startTime
+            local delta    = input.Position - startPos
+            local dist2    = delta.X*delta.X + delta.Y*delta.Y
+            if not moved and dist2 <= (deadzone*deadzone) and duration <= 0.35 and onShortTap then
+                local now = time()
+                if now - lastTapAt > 0.2 then -- anti-doble
+                    lastTapAt = now
                     onShortTap()
                 end
             end
-        end)
+            currentInp = nil
+        end
+    end)
+
+    -- Fallback por si algún dispositivo no emite InputEnded correctamente
+    button.MouseButton1Click:Connect(function()
+        local now = time()
+        if (now - lastTapAt) < 0.2 then return end
+        if not dragging and not moved and onShortTap then
+            lastTapAt = now
+            onShortTap()
+        end
     end)
 end
 
@@ -493,8 +510,7 @@ local function enableESP()
             if plr ~= localPlayer and espEnabled then
                 highlightPlayer(plr, plr.Character)
                 espConnections[plr] = plr.CharacterAdded:Connect(function(char)
-                    if espEnabled then task.defer(function() highlightPlayer(plr, char) end) end
-                end)
+                    if espEnabled then task.defer(function() highlightPlayer(plr, char) end) end)
             end
         end)
     end
@@ -587,7 +603,7 @@ end
 
 local function startLock()
     if lockConnection then lockConnection:Disconnect() lockConnection = nil end
-    local t, dot = findTarget()
+    local t = select(1, findTarget())
     targetCharacter = t
     if not targetCharacter then
         logEvent("Lock: sin objetivo")
@@ -965,21 +981,6 @@ local function createSlider(parent, y, labelText, minVal, maxVal, defaultVal, de
             dragging = false
         end
     end)
-    knob.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-        end
-    end)
-    knob.InputChanged:Connect(function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            setValueFromX(input.Position.X)
-        end
-    end)
-    knob.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = false
-        end
-    end)
 
     return {
         get = function() return currentValue end,
@@ -1177,19 +1178,19 @@ hudToggleBtn.MouseButton1Click:Connect(function()
 end)
 
 --==================================================
--- DRAGGABLE + TAP para ☰ y LOCK (soluciona bug de arrastre/click)
+-- DRAGGABLE + TAP para ☰ y LOCK (FIX principal)
 --==================================================
 makeDraggableButton(openBtn, dragFrame, function()
-    -- Tap corto en ☰: abrir/cerrar menú
+    -- Tap corto en ☰: abrir menú
     dragFrame.Visible = false
     menuFrame.Visible = true
     reclampAll()
-end, 8) -- deadzone mayor para asegurar arrastre suave
+end, 18) -- deadzone amplia para evitar falsos "moved" en móvil
 
 makeDraggableButton(quickLockBtn, quickLockBtn, function()
     -- Tap corto en LOCK: toggle lock
     if not lockActive then startLock() else stopLock() end
-end, 8)
+end, 16)
 
 --==================================================
 -- VELOCIDAD con flechas y ascenso/descenso
@@ -1243,4 +1244,4 @@ closeBtn.MouseButton1Click:Connect(function()
     reclampAll()
 end)
 
-print("✅ Script cargado (drag fijo para ☰ y LOCK, sin clicks fantasma)")
+print("✅ Script cargado (☰ abre menú con tap; drag/tap robustos en móvil)")
