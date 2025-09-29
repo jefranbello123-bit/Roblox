@@ -1,76 +1,19 @@
--- Script completo y estable (móvil) — Fly, ESP, Speed, Lock Quick Button, Noclip, Anti-Hit, Knockback, Floor, HUD
--- + Ajustes básicos + Golpe Rápido (Fast Attack) + Kill Aura (opcionales)
--- ⚠️ Pon este LocalScript en StarterPlayerScripts o StarterGui. No usa dependencias externas.
--- 🧪 Usa las MISMAS rutinas de arrastre y clic que ya te funcionaban. Visuales "opcionales" van en pcall para evitar que rompan la ejecución.
+-- Script BASE ESTABLE (revert) — Fly, ESP, Speed, Lock Quick Button, Noclip, Anti-Hit, Knockback, Floor y HUD
+-- ✅ Vuelve a las mismas rutinas/estructuras que te funcionaban (sin Kill Aura ni Fast Attack, sin estilos extra).
+-- ⚠️ Pega este LocalScript en StarterPlayerScripts o StarterGui (móvil primero, sin dependencias externas).
 
 --==================================================
--- SERVICIOS / JUGADOR
+-- SERVICIOS
 --==================================================
-local Players     = game:GetService("Players")
-local RunService  = game:GetService("RunService")
-local Debris      = game:GetService("Debris")
-local Workspace   = game:GetService("Workspace")
+local Players    = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Debris     = game:GetService("Debris")
 
 local localPlayer = Players.LocalPlayer
-if not localPlayer then return end
-
-local playerGui = localPlayer:FindFirstChildOfClass("PlayerGui") or localPlayer:WaitForChild("PlayerGui")
+local playerGui   = localPlayer:WaitForChild("PlayerGui")
 
 --==================================================
--- PARÁMETROS (mismos valores base)
---==================================================
-local SPEED_INC_DEFAULT     = 4
-local WALK_MAX_SPEED        = 100
-local NOCLIP_MAX_SPEED      = 200
-local FLY_DEFAULT_SPEED     = 50
-local NOCLIP_DEFAULT_SPEED  = 50
-
--- Lock-on
-local LOCK_DOT_THRESHOLD    = 0.90
-local LOCK_RANGE            = 220
-local LOCK_SMOOTH_ALPHA     = 0.25
-local LOCK_LOSS_GRACE       = 0.40 -- seg
-
--- Fast Attack / Kill Aura (opcionales)
-local FAST_ATK_RATE_HZ      = 12   -- 2–25
-local KA_RANGE_DEFAULT      = 18   -- studs
-local KA_TEAM_CHECK         = true
-local KA_FACE_TARGET        = true
-
---==================================================
--- HELPERS VISUALES (seguros con pcall)
---==================================================
-local function safeStroke(gui, thickness, color, transparency)
-    local ok, stroke = pcall(function()
-        local s = Instance.new("UIStroke")
-        s.Thickness       = thickness or 1.5
-        s.Color           = color or Color3.fromRGB(255,255,255)
-        s.Transparency    = transparency or 0.2
-        s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-        s.Parent = gui
-        return s
-    end)
-    return ok and stroke or nil
-end
-
-local function darken(c, amt)
-    return c:Lerp(Color3.fromRGB(0,0,0), amt or 0.22)
-end
-
-local function safeGradient(gui, baseColor)
-    pcall(function()
-        local g = Instance.new("UIGradient")
-        g.Color    = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, baseColor),
-            ColorSequenceKeypoint.new(1, darken(baseColor, 0.25))
-        })
-        g.Rotation = 90
-        g.Parent   = gui
-    end)
-end
-
---==================================================
--- GUI PRINCIPAL (MISMA ESTRUCTURA/NOMBRES)
+-- GUI PRINCIPAL (MISMA ESTRUCTURA QUE FUNCIONABA)
 --==================================================
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name           = "FlySpeedESPLockGui"
@@ -79,58 +22,40 @@ screenGui.IgnoreGuiInset = true
 screenGui.DisplayOrder   = 100
 screenGui.Parent         = playerGui
 
--- Pequeño estado de diagnóstico para saber si cargó
-local statusLabel = Instance.new("TextLabel")
-statusLabel.Size = UDim2.new(0,160,0,22)
-statusLabel.Position = UDim2.new(0,8,0,8)
-statusLabel.BackgroundColor3 = Color3.fromRGB(20,20,26)
-statusLabel.TextColor3 = Color3.fromRGB(210,240,210)
-statusLabel.Text = "[OK] Script inicializando…"
-statusLabel.Font = Enum.Font.GothamSemibold
-statusLabel.TextSize = 12
-statusLabel.BackgroundTransparency = 0.15
-statusLabel.Visible = true
-statusLabel.Parent = screenGui
-pcall(function() Instance.new("UICorner", statusLabel).CornerRadius = UDim.new(0,6) end)
-
--- Botón circular (☰) en contenedor movible (MISMO patrón de arrastre/click)
+-- Botón circular (☰) para abrir menú (movible)
 local dragFrame = Instance.new("Frame", screenGui)
 dragFrame.Size                   = UDim2.new(0,60,0,60)
-dragFrame.Position               = UDim2.new(0.08,0,0.55,0)
+dragFrame.Position               = UDim2.new(0.5,-30,0.5,-30)
 dragFrame.BackgroundTransparency = 1
 dragFrame.Active                 = true
 dragFrame.ZIndex                 = 100
 
 local openBtn = Instance.new("TextButton", dragFrame)
 openBtn.Size             = UDim2.new(1,0,1,0)
-openBtn.BackgroundColor3 = Color3.fromRGB(50,170,160) -- TEAL
+openBtn.BackgroundColor3 = Color3.fromRGB(50,170,160)   -- TEAL
 openBtn.TextColor3       = Color3.new(1,1,1)
 openBtn.Font             = Enum.Font.GothamBold
 openBtn.TextSize         = 28
 openBtn.Text             = "☰"
 openBtn.BorderSizePixel  = 0
 openBtn.ZIndex           = 101
-pcall(function() Instance.new("UICorner", openBtn).CornerRadius = UDim.new(0.5,0) end)
-safeStroke(openBtn, 1.4, Color3.fromRGB(235,255,255), 0.12)
-safeGradient(openBtn, openBtn.BackgroundColor3)
+Instance.new("UICorner", openBtn).CornerRadius = UDim.new(0.5,0)
 
--- Menú (MISMO tamaño y posiciones que te funcionaban, con ligera altura si hace falta)
+-- Menú principal (5 filas x 2 columnas)
 local menuFrame = Instance.new("Frame", screenGui)
-menuFrame.Size              = UDim2.new(0,260,0,360)
-menuFrame.Position          = UDim2.new(0.065,0,0.20,0)
+menuFrame.Size              = UDim2.new(0,260,0,320)
+menuFrame.Position          = UDim2.new(0.5,-130,0.5,-160)
 menuFrame.BackgroundColor3  = Color3.fromRGB(24,24,30)
 menuFrame.Visible           = false
 menuFrame.Active            = true
 menuFrame.ZIndex            = 100
-pcall(function() Instance.new("UICorner", menuFrame).CornerRadius = UDim.new(0,10) end)
-safeStroke(menuFrame, 2, Color3.fromRGB(60,70,100), 0.35)
-safeGradient(menuFrame, Color3.fromRGB(28,28,36))
+Instance.new("UICorner", menuFrame).CornerRadius = UDim.new(0,8)
 
 local titleLabel = Instance.new("TextLabel", menuFrame)
-titleLabel.Size                   = UDim2.new(1,-40,0,26)
+titleLabel.Size                   = UDim2.new(1,-40,0,24)
 titleLabel.Position               = UDim2.new(0,20,0,8)
 titleLabel.BackgroundTransparency = 1
-titleLabel.TextColor3             = Color3.fromRGB(235,240,255)
+titleLabel.TextColor3             = Color3.new(1,1,1)
 titleLabel.Font                   = Enum.Font.GothamBold
 titleLabel.TextSize               = 20
 titleLabel.TextXAlignment         = Enum.TextXAlignment.Left
@@ -147,10 +72,9 @@ closeBtn.TextSize         = 18
 closeBtn.Text             = "×"
 closeBtn.BorderSizePixel  = 0
 closeBtn.ZIndex           = 101
-pcall(function() Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0.5,0) end)
-safeStroke(closeBtn,1.2,Color3.fromRGB(255,255,255),0.08)
+Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0.5,0)
 
--- Helper botones (MISMO layout)
+-- Helper para botones del menú
 local function createToggleButton(name,text,pos,color)
     local btn = Instance.new("TextButton", menuFrame)
     btn.Name             = name
@@ -163,13 +87,10 @@ local function createToggleButton(name,text,pos,color)
     btn.Text             = text
     btn.BorderSizePixel  = 0
     btn.ZIndex           = 101
-    pcall(function() Instance.new("UICorner", btn).CornerRadius = UDim.new(0,8) end)
-    safeStroke(btn,1.1,Color3.fromRGB(245,245,255),0.15)
-    safeGradient(btn, color)
     return btn
 end
 
--- Botones (paleta original + extra)
+-- Botones del menú (paleta original)
 local flyToggleBtn     = createToggleButton("FlyToggle",     "Fly OFF",         UDim2.new(0,10,0,40),  Color3.fromRGB(0,170,255))
 local espToggleBtn     = createToggleButton("ESPToggle",     "ESP OFF",         UDim2.new(0,130,0,40), Color3.fromRGB(255,105,180))
 local speedToggleBtn   = createToggleButton("SpeedToggle",   "Speed OFF",       UDim2.new(0,10,0,90),  Color3.fromRGB(255,165,0))
@@ -179,16 +100,13 @@ local antiHitToggleBtn = createToggleButton("AntiHitToggle", "Anti-Hit OFF",    
 local knockToggleBtn   = createToggleButton("KnockToggle",   "Knockback OFF",   UDim2.new(0,10,0,190), Color3.fromRGB(144,238,144))
 local floorToggleBtn   = createToggleButton("FloorToggle",   "Floor OFF",       UDim2.new(0,130,0,190),Color3.fromRGB(210,180,140))
 local hudToggleBtn     = createToggleButton("HUDToggle",     "HUD OFF",         UDim2.new(0,10,0,240), Color3.fromRGB(80,120,200))
-local settingsBtn      = createToggleButton("SettingsBtn",   "Ajustes",         UDim2.new(0,130,0,240),Color3.fromRGB(50,170,160))
-local fastAtkToggleBtn = createToggleButton("FastAtkToggle", "Golpe Rápido OFF",UDim2.new(0,10,0,290), Color3.fromRGB(255,215,0))
-local kaToggleBtn      = createToggleButton("KAToggle",      "Kill Aura OFF",   UDim2.new(0,130,0,290),Color3.fromRGB(170,120,255))
 
--- Botones laterales (MISMAS posiciones)
+-- Botones laterales (ascenso/descenso y speed +/-)
 local ascendBtn, descendBtn, speedUpBtn, speedDownBtn = Instance.new("TextButton"), Instance.new("TextButton"), Instance.new("TextButton"), Instance.new("TextButton")
 ascendBtn.Parent, descendBtn.Parent, speedUpBtn.Parent, speedDownBtn.Parent = screenGui, screenGui, screenGui, screenGui
 
 local function styleSide(btn, pos, color, txt)
-    btn.Size             = UDim2.new(0,56,0,56)
+    btn.Size             = UDim2.new(0,50,0,50)
     btn.Position         = pos
     btn.BackgroundColor3 = color
     btn.TextColor3       = Color3.new(1,1,1)
@@ -198,34 +116,30 @@ local function styleSide(btn, pos, color, txt)
     btn.BorderSizePixel  = 0
     btn.Visible          = false
     btn.ZIndex           = 101
-    pcall(function() Instance.new("UICorner", btn).CornerRadius = UDim.new(0.4,0) end)
-    safeStroke(btn,1.1,Color3.fromRGB(245,245,255),0.15)
-    safeGradient(btn, color)
 end
-styleSide(ascendBtn,    UDim2.new(0.86,0,0.45,0), Color3.fromRGB(0,170,255), "↑")
-styleSide(descendBtn,   UDim2.new(0.86,0,0.61,0), Color3.fromRGB(0,120,200), "↓")
-styleSide(speedUpBtn,   UDim2.new(0.72,0,0.45,0), Color3.fromRGB(50,205,50), "↑")
-styleSide(speedDownBtn, UDim2.new(0.72,0,0.61,0), Color3.fromRGB(46,139,87), "↓")
+
+styleSide(ascendBtn,     UDim2.new(0.88,0,0.48,0), Color3.fromRGB(0,170,255), "↑")
+styleSide(descendBtn,    UDim2.new(0.88,0,0.62,0), Color3.fromRGB(0,120,200), "↓")
+styleSide(speedUpBtn,    UDim2.new(0.74,0,0.48,0), Color3.fromRGB(50,205,50), "↑")
+styleSide(speedDownBtn,  UDim2.new(0.74,0,0.62,0), Color3.fromRGB(46,139,87), "↓")
 
 --==================================================
--- ESTADO GLOBAL
+-- ESTADO
 --==================================================
 local flying, espEnabled, speedEnabled, noclipEnabled, antiHitEnabled, knockbackEnabled, floorEnabled = false,false,false,false,false,false,false
-local fastAtkEnabled, killAuraEnabled = false, false
 local lockBtnVisible, lockActive = false, false
 local ascend, descend = false, false
 
 local bodyGyro, bodyVel, flyConnection
 local currentHighlights, espConnections, espGlobalConnection = {}, {}, nil
 local originalWalkSpeed, currentSpeed, speedConnection = nil, nil, nil
-local speedIncrement = SPEED_INC_DEFAULT
+local speedIncrement, maxSpeed = 4, 100
 local speedTarget = nil
 
-local noclipSpeed = NOCLIP_DEFAULT_SPEED
+local noclipSpeed = 50
 local noclipBodyGyro, noclipBodyVel, noclipConnection, noclipCollisionConn = nil, nil, nil, nil
 
 local targetCharacter, lockConnection = nil, nil
-local lastGoodDotTime = 0
 
 local antiDamageConn, platformConn, stateConn, antiKnockConn = nil, nil, nil, nil
 
@@ -234,29 +148,22 @@ local knockbackPower, upwardPower = 100, 50
 
 local floorConnection
 
--- Fast Attack / Kill Aura
-local fastAtkConn, kaConn
-local fastAtkRate   = FAST_ATK_RATE_HZ
-local killAuraRange = KA_RANGE_DEFAULT
-local lastAttackTime= 0
-local kaRingPart    = nil
-
 --==================================================
--- HUD DE REGISTRO (MISMO diseño base + limpiar)
+-- HUD DE REGISTRO (movible)
 --==================================================
 local hudFrame = Instance.new("Frame", screenGui)
 hudFrame.Name                   = "LogHUD"
-hudFrame.Size                   = UDim2.new(0,260,0,150)
+hudFrame.Size                   = UDim2.new(0,260,0,140)
 hudFrame.Position               = UDim2.new(0.025,0,0.12,0)
 hudFrame.BackgroundColor3       = Color3.fromRGB(12,12,16)
 hudFrame.BackgroundTransparency = 0.15
 hudFrame.Visible                = false
 hudFrame.Active                 = true
 hudFrame.ZIndex                 = 102
-pcall(function() Instance.new("UICorner", hudFrame).CornerRadius = UDim.new(0,10) end)
+Instance.new("UICorner", hudFrame).CornerRadius = UDim.new(0,8)
 
 local hudTitle = Instance.new("TextLabel", hudFrame)
-hudTitle.Size                   = UDim2.new(1, -60, 0, 20)
+hudTitle.Size                   = UDim2.new(1, -28, 0, 20)
 hudTitle.Position               = UDim2.new(0,8,0,6)
 hudTitle.BackgroundTransparency = 1
 hudTitle.Text                   = "Registro"
@@ -266,29 +173,17 @@ hudTitle.TextColor3             = Color3.fromRGB(240,240,255)
 hudTitle.TextXAlignment         = Enum.TextXAlignment.Left
 hudTitle.ZIndex                 = 103
 
-local hudClear = Instance.new("TextButton", hudFrame)
-hudClear.Size             = UDim2.new(0,24,0,20)
-hudClear.Position         = UDim2.new(1,-54,0,6)
-hudClear.BackgroundColor3 = Color3.fromRGB(90,130,200)
-hudClear.TextColor3       = Color3.new(1,1,1)
-hudClear.Text             = "⟲"
-hudClear.Font             = Enum.Font.GothamBold
-hudClear.TextSize         = 14
-hudClear.BorderSizePixel  = 0
-hudClear.ZIndex           = 103
-pcall(function() Instance.new("UICorner", hudClear).CornerRadius = UDim.new(0.5,0) end)
-
 local hudClose = Instance.new("TextButton", hudFrame)
-hudClose.Size             = UDim2.new(0,24,0,20)
+hudClose.Size             = UDim2.new(0,20,0,20)
 hudClose.Position         = UDim2.new(1,-26,0,6)
 hudClose.BackgroundColor3 = Color3.fromRGB(235,70,70)
 hudClose.TextColor3       = Color3.new(1,1,1)
 hudClose.Text             = "×"
 hudClose.Font             = Enum.Font.GothamBold
-hudClose.TextSize         = 14
+hudClose.TextSize         = 16
 hudClose.BorderSizePixel  = 0
 hudClose.ZIndex           = 103
-pcall(function() Instance.new("UICorner", hudClose).CornerRadius = UDim.new(0.5,0) end)
+Instance.new("UICorner", hudClose).CornerRadius = UDim.new(0.5,0)
 
 local hudScroll = Instance.new("ScrollingFrame", hudFrame)
 hudScroll.Size                    = UDim2.new(1, -12, 1, -34)
@@ -309,26 +204,18 @@ hudList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateCanvas)
 
 local hudEnabled = false
 local function trimHUD(maxItems)
-    local items = {}
+    local count = 0
     for _, ch in ipairs(hudScroll:GetChildren()) do
-        if ch:IsA("TextLabel") then table.insert(items, ch) end
+        if ch:IsA("TextLabel") then count += 1 end
     end
-    while #items > maxItems do
-        items[1]:Destroy()
-        table.remove(items,1)
-    end
-end
-
-local function colorForMessage(msg)
-    msg = (msg or ""):lower()
-    if msg:find("on") or msg:find("visible") then
-        return Color3.fromRGB(160,230,180)
-    elseif msg:find("off") or msg:find("oculto") or msg:find("perdido") then
-        return Color3.fromRGB(240,170,170)
-    elseif msg:find("speed") or msg:find("noclip") or msg:find("aura") or msg:find("golpe") then
-        return Color3.fromRGB(220,210,150)
-    else
-        return Color3.fromRGB(230,230,240)
+    while count > maxItems do
+        for _, ch in ipairs(hudScroll:GetChildren()) do
+            if ch:IsA("TextLabel") then
+                ch:Destroy()
+                count -= 1
+                break
+            end
+        end
     end
 end
 
@@ -341,14 +228,14 @@ local function logEvent(msg)
     lab.TextYAlignment         = Enum.TextYAlignment.Center
     lab.Font                   = Enum.Font.GothamSemibold
     lab.TextSize               = 14
-    lab.TextColor3             = colorForMessage(msg)
+    lab.TextColor3             = Color3.fromRGB(230,230,240)
     lab.Size                   = UDim2.new(1, -6, 0, 18)
-    lab.Text                   = os.date("%H:%M:%S") .. "  " .. tostring(msg)
+    lab.Text                   = os.date("%H:%M:%S") .. "  " .. msg
     lab.ZIndex                 = 102
     lab.Parent                 = hudScroll
     trimHUD(14)
     updateCanvas()
-    Debris:AddItem(lab, 14)
+    Debris:AddItem(lab, 14) -- cada entrada dura ~14s
 end
 
 hudClose.MouseButton1Click:Connect(function()
@@ -357,21 +244,14 @@ hudClose.MouseButton1Click:Connect(function()
     hudToggleBtn.Text = "HUD OFF"
     logEvent("HUD oculto")
 end)
-hudClear.MouseButton1Click:Connect(function()
-    for _, ch in ipairs(hudScroll:GetChildren()) do
-        if ch:IsA("TextLabel") then ch:Destroy() end
-    end
-    updateCanvas()
-    logEvent("HUD limpiado")
-end)
 
 --==================================================
--- QUICK LOCK BUTTON (MISMO comportamiento)
+-- BOTÓN RÁPIDO DE LOCK (movible)
 --==================================================
 local quickLockBtn = Instance.new("TextButton", screenGui)
 quickLockBtn.Size             = UDim2.new(0,70,0,70)
-quickLockBtn.Position         = UDim2.new(0.78,0,0.60,0)
-quickLockBtn.BackgroundColor3 = Color3.fromRGB(120,200,255)
+quickLockBtn.Position         = UDim2.new(0.7,0,0.6,0)
+quickLockBtn.BackgroundColor3 = Color3.fromRGB(120,200,255) -- inactivo
 quickLockBtn.TextColor3       = Color3.new(1,1,1)
 quickLockBtn.Font             = Enum.Font.GothamBold
 quickLockBtn.TextSize         = 18
@@ -379,13 +259,12 @@ quickLockBtn.Text             = "LOCK"
 quickLockBtn.BorderSizePixel  = 0
 quickLockBtn.Visible          = false
 quickLockBtn.ZIndex           = 101
-pcall(function() Instance.new("UICorner", quickLockBtn).CornerRadius = UDim.new(0.5,0) end)
-safeStroke(quickLockBtn,1.2,Color3.fromRGB(245,245,255),0.12)
-safeGradient(quickLockBtn, quickLockBtn.BackgroundColor3)
+Instance.new("UICorner", quickLockBtn).CornerRadius = UDim.new(0.5,0)
 
 --==================================================
--- UTILIDADES (ARRASTRE CON EL MISMO PATRÓN)
+-- UTILIDADES (drag, colisión, etc.)
 --==================================================
+-- Drag genérico (MISMO que te funcionaba)
 local draggingFlag, startPosInput, startPosGui
 local function beginDrag(input, gui)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -398,34 +277,31 @@ local function beginDrag(input, gui)
     end
 end
 local function updateDrag(input, gui)
-    if not draggingFlag then return end
-    if input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then return end
-    local delta = input.Position - startPosInput
-    local newPos= UDim2.new(startPosGui.X.Scale, startPosGui.X.Offset + delta.X,
-                            startPosGui.Y.Scale, startPosGui.Y.Offset + delta.Y)
-    local cam      = Workspace.CurrentCamera
-    local viewport = cam and cam.ViewportSize or Vector2.new(800,600)
-    local guiSize  = gui.AbsoluteSize
-    local maxX     = viewport.X - guiSize.X
-    local maxY     = viewport.Y - guiSize.Y
-    gui.Position   = UDim2.new(0, math.clamp(newPos.X.Offset,0,math.max(0,maxX)),
-                                  0, math.clamp(newPos.Y.Offset,0,math.max(0,maxY)))
+    if draggingFlag and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - startPosInput
+        local newPos= UDim2.new(startPosGui.X.Scale,startPosGui.X.Offset+delta.X,
+                                 startPosGui.Y.Scale,startPosGui.Y.Offset+delta.Y)
+        local cam      = workspace.CurrentCamera
+        local viewport = cam and cam.ViewportSize or Vector2.new(800,600)
+        local guiSize  = gui.AbsoluteSize
+        local maxX     = viewport.X - guiSize.X
+        local maxY     = viewport.Y - guiSize.Y
+        local clampedX = math.clamp(newPos.X.Offset,0,math.max(0,maxX))
+        local clampedY = math.clamp(newPos.Y.Offset,0,math.max(0,maxY))
+        gui.Position   = UDim2.new(0,clampedX,0,clampedY)
+    end
 end
 local function makeDraggable(gui)
     gui.InputBegan:Connect(function(input) beginDrag(input, gui) end)
     gui.InputChanged:Connect(function(input) updateDrag(input, gui) end)
 end
 
--- MISMO set de elementos arrastrables
 makeDraggable(dragFrame)
-makeDraggable(openBtn)
 makeDraggable(menuFrame)
+makeDraggable(openBtn)
 makeDraggable(hudFrame)
 makeDraggable(quickLockBtn)
 
---==================================================
--- FUNCIONES CORE (idénticas en lógica a las estables)
---==================================================
 -- Colisiones personaje (para noclip)
 local function setCharacterCollision(enabled)
     local char = localPlayer.Character
@@ -437,7 +313,9 @@ local function setCharacterCollision(enabled)
     end
 end
 
+--==================================================
 -- FLY
+--==================================================
 local function startFly()
     local char = localPlayer.Character or localPlayer.CharacterAdded:Wait()
     local hrp  = char:FindFirstChild("HumanoidRootPart")
@@ -461,26 +339,28 @@ local function startFly()
         if ascend then dir = dir + Vector3.new(0,1,0) end
         if descend then dir = dir + Vector3.new(0,-1,0) end
         if dir.Magnitude > 0 then dir = dir.Unit end
-        bodyVel.Velocity = dir * FLY_DEFAULT_SPEED
-        local cam = Workspace.CurrentCamera
+        bodyVel.Velocity = dir * 50
+        local cam = workspace.CurrentCamera
         if cam then bodyGyro.CFrame = cam.CFrame end
     end)
 end
+
 local function stopFly()
     if flyConnection then flyConnection:Disconnect() flyConnection = nil end
     if bodyGyro      then bodyGyro:Destroy()      bodyGyro      = nil end
     if bodyVel       then bodyVel:Destroy()       bodyVel       = nil end
 end
 
+--==================================================
 -- ESP
+--==================================================
 local function enableESP()
     local function highlightPlayer(plr, character)
         if not character or not plr then return end
         local existing = currentHighlights[plr]
         if not existing then
             local h = Instance.new("Highlight")
-            -- paleta rosa fuerte
-            h.FillColor           = Color3.fromRGB(255,20,147)
+            h.FillColor           = Color3.new(1,0,0)
             h.FillTransparency    = 0.5
             h.OutlineColor        = Color3.new(1,1,1)
             h.OutlineTransparency = 0
@@ -506,21 +386,28 @@ local function enableESP()
         espGlobalConnection = Players.PlayerAdded:Connect(function(plr)
             if plr ~= localPlayer and espEnabled then
                 highlightPlayer(plr, plr.Character)
-                if espConnections[plr] then espConnections[plr]:Disconnect() end
                 espConnections[plr] = plr.CharacterAdded:Connect(function(char)
                     if espEnabled then task.defer(function() highlightPlayer(plr, char) end) end)
             end
         end)
     end
 end
+
 local function disableESP()
-    for _, conn in pairs(espConnections) do if conn then conn:Disconnect() end end
-    espConnections = {}
+    for plr, conn in pairs(espConnections) do
+        if conn then conn:Disconnect() end
+        espConnections[plr] = nil
+    end
     if espGlobalConnection then espGlobalConnection:Disconnect() espGlobalConnection = nil end
-    for plr, h in pairs(currentHighlights) do if h then h:Destroy() end currentHighlights[plr]=nil end
+    for plr, highlight in pairs(currentHighlights) do
+        if highlight then highlight:Destroy() end
+        currentHighlights[plr] = nil
+    end
 end
 
+--==================================================
 -- SPEED
+--==================================================
 local function maintainSpeed()
     if speedConnection then speedConnection:Disconnect() end
     speedConnection = RunService.Heartbeat:Connect(function()
@@ -531,6 +418,7 @@ local function maintainSpeed()
         end
     end)
 end
+
 local function enableSpeed()
     local char = localPlayer.Character
     if char then
@@ -538,7 +426,7 @@ local function enableSpeed()
         if hum then
             originalWalkSpeed = originalWalkSpeed or hum.WalkSpeed
             currentSpeed      = math.max(hum.WalkSpeed*2, originalWalkSpeed)
-            if currentSpeed > WALK_MAX_SPEED then currentSpeed = WALK_MAX_SPEED end
+            if currentSpeed > maxSpeed then currentSpeed = maxSpeed end
             hum.WalkSpeed     = currentSpeed
             speedUpBtn.Visible   = true
             speedDownBtn.Visible = true
@@ -546,6 +434,7 @@ local function enableSpeed()
         end
     end
 end
+
 local function disableSpeed()
     local char = localPlayer.Character
     if char then
@@ -559,13 +448,15 @@ local function disableSpeed()
     if speedConnection then speedConnection:Disconnect() speedConnection = nil end
 end
 
--- LOCK-ON
+--==================================================
+-- LOCK-ON (usado por el botón rápido)
+--==================================================
 local function findTarget()
-    local cam = Workspace.CurrentCamera
+    local cam = workspace.CurrentCamera
     if not cam then return nil end
-    local camPos = cam.CFrame.Position
-    local camDir = cam.CFrame.LookVector
-    local bestTarget, bestDot = nil, LOCK_DOT_THRESHOLD
+    local camPos   = cam.CFrame.Position
+    local camDir   = cam.CFrame.LookVector
+    local bestTarget, bestDot = nil, 0.9
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= localPlayer then
             local char = plr.Character
@@ -573,31 +464,31 @@ local function findTarget()
             if root then
                 local vec  = root.Position - camPos
                 local dist = vec.Magnitude
-                if dist < LOCK_RANGE then
-                    local dir = vec / dist
-                    local dot = dir:Dot(camDir)
+                if dist < 200 then
+                    local dir  = vec / dist
+                    local dot  = dir:Dot(camDir)
                     if dot > bestDot then
-                        bestDot    = dot
-                        bestTarget = char
+                        bestDot   = dot
+                        bestTarget= char
                     end
                 end
             end
         end
     end
-    return bestTarget, bestDot
+    return bestTarget
 end
+
 local function startLock()
     if lockConnection then lockConnection:Disconnect() lockConnection = nil end
-    targetCharacter = select(1, findTarget())
+    targetCharacter = findTarget()
     if not targetCharacter then
         logEvent("Lock: sin objetivo")
         return
     end
     lockActive = true
-    lastGoodDotTime = tick()
-    quickLockBtn.BackgroundColor3 = Color3.fromRGB(160,120,255)
+    quickLockBtn.BackgroundColor3 = Color3.fromRGB(160,120,255) -- activo
     logEvent("Lock: ON → " .. (targetCharacter.Name or "objetivo"))
-    lockConnection = RunService.RenderStepped:Connect(function(dt)
+    lockConnection = RunService.RenderStepped:Connect(function()
         if not targetCharacter or not targetCharacter.Parent then
             if lockConnection then lockConnection:Disconnect() lockConnection = nil end
             lockActive = false
@@ -605,41 +496,16 @@ local function startLock()
             logEvent("Lock: objetivo perdido")
             return
         end
-        local cam = Workspace.CurrentCamera
+        local cam = workspace.CurrentCamera
         if cam then
             local camPos    = cam.CFrame.Position
-            local root      = targetCharacter:FindFirstChild("HumanoidRootPart")
-            if not root then return end
-            local lookAtPos = root.Position
-
-            local toTarget  = (lookAtPos - camPos)
-            local dist      = toTarget.Magnitude
-            local dir       = (dist > 0) and (toTarget / dist) or cam.CFrame.LookVector
-            local dotNow    = dir:Dot(cam.CFrame.LookVector)
-
-            if dist <= LOCK_RANGE and dotNow >= LOCK_DOT_THRESHOLD then
-                lastGoodDotTime = tick()
-            elseif (tick() - lastGoodDotTime) > LOCK_LOSS_GRACE then
-                local newT = select(1, findTarget())
-                if newT then
-                    targetCharacter = newT
-                    lastGoodDotTime = tick()
-                    logEvent("Lock: objetivo cambiado → " .. (targetCharacter.Name or "?"))
-                else
-                    if lockConnection then lockConnection:Disconnect() lockConnection = nil end
-                    lockActive = false
-                    quickLockBtn.BackgroundColor3 = Color3.fromRGB(120,200,255)
-                    logEvent("Lock: OFF (sin objetivo)")
-                    return
-                end
-            end
-
-            local targetCF = CFrame.lookAt(camPos, lookAtPos)
-            local alpha = 1 - (1-LOCK_SMOOTH_ALPHA)^(math.max(dt,0.016) * 60)
-            cam.CFrame = cam.CFrame:Lerp(targetCF, alpha)
+            local targetHRP = targetCharacter:FindFirstChild("HumanoidRootPart")
+            local lookAtPos = targetHRP and targetHRP.Position or targetCharacter:GetPivot().Position
+            cam.CFrame      = CFrame.lookAt(camPos, lookAtPos)
         end
     end)
 end
+
 local function stopLock()
     if lockConnection then lockConnection:Disconnect() lockConnection = nil end
     lockActive = false
@@ -647,7 +513,9 @@ local function stopLock()
     logEvent("Lock: OFF")
 end
 
+--==================================================
 -- NOCLIP
+--==================================================
 local function startNoclip()
     local char = localPlayer.Character or localPlayer.CharacterAdded:Wait()
     local hrp  = char:FindFirstChild("HumanoidRootPart")
@@ -673,7 +541,7 @@ local function startNoclip()
         if descend then dir = dir + Vector3.new(0,-1,0) end
         if dir.Magnitude > 0 then dir = dir.Unit end
         noclipBodyVel.Velocity = dir * noclipSpeed
-        local cam = Workspace.CurrentCamera
+        local cam = workspace.CurrentCamera
         if cam then noclipBodyGyro.CFrame = cam.CFrame end
     end)
     noclipCollisionConn = RunService.Stepped:Connect(function()
@@ -682,6 +550,7 @@ local function startNoclip()
         end
     end)
 end
+
 local function stopNoclip()
     setCharacterCollision(true)
     if noclipConnection    then noclipConnection:Disconnect()    noclipConnection    = nil end
@@ -690,12 +559,13 @@ local function stopNoclip()
     if noclipBodyVel       then noclipBodyVel:Destroy()          noclipBodyVel       = nil end
 end
 
--- ANTI-HIT
+--==================================================
+-- ANTI-HIT (desactiva empujes y cae rápido)
+--==================================================
 local function enableAntiHit()
     local char = localPlayer.Character
     local hum  = char and char:FindFirstChildOfClass("Humanoid")
     if not hum then return end
-
     if not antiDamageConn then
         antiDamageConn = hum.HealthChanged:Connect(function()
             if antiHitEnabled and hum then hum.Health = hum.MaxHealth end
@@ -708,7 +578,8 @@ local function enableAntiHit()
     end
     if not stateConn then
         stateConn = hum.StateChanged:Connect(function(_, new)
-            if antiHitEnabled and (new == Enum.HumanoidStateType.FallingDown
+            if antiHitEnabled and (new == Enum.HumanoidStateType.Freefall
+            or new == Enum.HumanoidStateType.FallingDown
             or new == Enum.HumanoidStateType.Physics
             or new == Enum.HumanoidStateType.Ragdoll) then
                 hum:ChangeState(Enum.HumanoidStateType.Running)
@@ -721,28 +592,23 @@ local function enableAntiHit()
             local char  = localPlayer.Character
             local hum   = char and char:FindFirstChildOfClass("Humanoid")
             local root  = char and char:FindFirstChild("HumanoidRootPart")
-            if not (hum and root) then return end
-
-            local move    = hum.MoveDirection
-            local desired = Vector3.new(0,0,0)
-            local base    = noclipEnabled and noclipSpeed or hum.WalkSpeed
-            if move.Magnitude > 0 then desired = move.Unit * base end
-
-            local v  = root.AssemblyLinearVelocity
-            local y  = v.Y
-            local jumping = hum:GetState() == Enum.HumanoidStateType.Jumping or hum.Jump
-            if not (jumping or ascend or descend or noclipEnabled or flying) then
-                local rayParams = RaycastParams.new()
-                rayParams.FilterDescendantsInstances = {char}
-                rayParams.FilterType = Enum.RaycastFilterType.Exclude
-                local ray = Workspace:Raycast(root.Position, Vector3.new(0,-12,0), rayParams)
-                local airborne = (ray == nil)
-                if airborne then y = math.max(y, -80) end
+            if hum and root then
+                local move    = hum.MoveDirection
+                local desired = Vector3.new(0,0,0)
+                if move.Magnitude > 0 then
+                    desired = move.Unit * (noclipEnabled and noclipSpeed or hum.WalkSpeed)
+                end
+                local currentVel = root.AssemblyLinearVelocity
+                local yVel = currentVel.Y
+                if hum:GetState() ~= Enum.HumanoidStateType.Jumping and not ascend and not descend then
+                    yVel = -50
+                end
+                root.AssemblyLinearVelocity = Vector3.new(desired.X, yVel, desired.Z)
             end
-            root.AssemblyLinearVelocity = Vector3.new(desired.X, y, desired.Z)
         end)
     end
 end
+
 local function disableAntiHit()
     if antiDamageConn then antiDamageConn:Disconnect() antiDamageConn = nil end
     if platformConn  then platformConn:Disconnect()  platformConn = nil end
@@ -750,37 +616,41 @@ local function disableAntiHit()
     if antiKnockConn then antiKnockConn:Disconnect() antiKnockConn = nil end
 end
 
--- KNOCKBACK
+--==================================================
+-- KNOCKBACK (empujar a otros)
+--==================================================
 local function enableKnockback()
     local char = localPlayer.Character
-    if not char then return end
-    local root = char:FindFirstChild("HumanoidRootPart")
-    for _,part in ipairs(char:GetDescendants()) do
-        if part:IsA("BasePart") then
-            local conn = part.Touched:Connect(function(hit)
-                if not knockbackEnabled then return end
-                local otherChar = hit:FindFirstAncestorOfClass("Model")
-                if otherChar and otherChar ~= char then
-                    local otherHum = otherChar:FindFirstChildOfClass("Humanoid")
-                    if otherHum and otherHum.Health > 0 then
-                        local otherRoot = otherChar:FindFirstChild("HumanoidRootPart")
-                        if otherRoot and root then
-                            local dir = otherRoot.Position - root.Position
-                            if dir.Magnitude > 0 then dir = dir.Unit else dir = Vector3.new() end
-                            local bv = Instance.new("BodyVelocity")
-                            bv.MaxForce = Vector3.new(1e5,1e5,1e5)
-                            bv.P        = 1e4
-                            bv.Velocity = dir * knockbackPower + Vector3.new(0, upwardPower, 0)
-                            bv.Parent   = otherRoot
-                            Debris:AddItem(bv, 0.3)
+    if char then
+        local root = char:FindFirstChild("HumanoidRootPart")
+        for _,part in ipairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then
+                local conn = part.Touched:Connect(function(hit)
+                    if not knockbackEnabled then return end
+                    local otherChar = hit:FindFirstAncestorOfClass("Model")
+                    if otherChar and otherChar ~= char then
+                        local otherHum = otherChar:FindFirstChildOfClass("Humanoid")
+                        if otherHum and otherHum.Health > 0 then
+                            local otherRoot = otherChar:FindFirstChild("HumanoidRootPart")
+                            if otherRoot and root then
+                                local dir = otherRoot.Position - root.Position
+                                if dir.Magnitude > 0 then dir = dir.Unit else dir = Vector3.new(0,0,0) end
+                                local bv = Instance.new("BodyVelocity")
+                                bv.MaxForce = Vector3.new(1e5,1e5,1e5)
+                                bv.P        = 1e4
+                                bv.Velocity = dir * knockbackPower + Vector3.new(0, upwardPower, 0)
+                                bv.Parent   = otherRoot
+                                Debris:AddItem(bv, 0.3)
+                            end
                         end
                     end
-                end
-            end)
-            knockbackConnections[part] = conn
+                end)
+                knockbackConnections[part] = conn
+            end
         end
     end
 end
+
 local function disableKnockback()
     for part, conn in pairs(knockbackConnections) do
         if conn then conn:Disconnect() end
@@ -788,7 +658,9 @@ local function disableKnockback()
     end
 end
 
--- FLOOR (placas)
+--==================================================
+-- FLOOR (placas bajo el jugador, 2s)
+--==================================================
 local function spawnFloorPlate()
     local char = localPlayer.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
@@ -796,300 +668,54 @@ local function spawnFloorPlate()
         local plate = Instance.new("Part")
         plate.Size      = Vector3.new(6,1,6)
         plate.Anchored  = true
-        plate.Material  = Enum.Material.Neon
         plate.Color     = Color3.fromRGB(255,200,0)
         plate.Position  = root.Position - Vector3.new(0,3.5,0)
         plate.Parent    = workspace
         Debris:AddItem(plate, 2)
     end
 end
+
 local function enableFloor()
     floorConnection = RunService.Heartbeat:Connect(spawnFloorPlate)
 end
+
 local function disableFloor()
     if floorConnection then floorConnection:Disconnect() floorConnection = nil end
 end
 
--- FAST ATTACK / KILL AURA (opcionales y seguros)
-local function getEquippedTool()
-    local char = localPlayer.Character
-    if not char then return nil end
-    for _, inst in ipairs(char:GetChildren()) do
-        if inst:IsA("Tool") then
-            return inst
-        end
-    end
-    return nil
-end
-
-local function tryAttackNow()
-    local tool = getEquippedTool()
-    if not tool or not tool.Activate then return false end
-    local now = tick()
-    local gap = 1 / math.max(2, fastAtkRate)
-    if now - lastAttackTime >= gap then
-        tool:Activate()
-        lastAttackTime = now
-        return true
-    end
-    return false
-end
-
-local function startFastAttack()
-    if fastAtkConn then fastAtkConn:Disconnect() fastAtkConn = nil end
-    fastAtkConn = RunService.Heartbeat:Connect(function()
-        if fastAtkEnabled then tryAttackNow() end
-    end)
-end
-local function stopFastAttack()
-    if fastAtkConn then fastAtkConn:Disconnect() fastAtkConn = nil end
-end
-
-local function ensureKARing()
-    if kaRingPart then return end
-    local p = Instance.new("Part")
-    p.Anchored    = true
-    p.CanCollide  = false
-    p.Material    = Enum.Material.Neon
-    p.Color       = Color3.fromRGB(170,120,255)
-    p.Transparency= 0.6
-    p.Shape       = Enum.PartType.Cylinder
-    p.Name        = "KA_Ring"
-    p.Parent      = workspace
-    kaRingPart    = p
-end
-local function removeKARing()
-    if kaRingPart then kaRingPart:Destroy() kaRingPart = nil end
-end
-
-local function getNearestEnemyInRange(range)
-    local char = localPlayer.Character
-    local hrp  = char and char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return nil end
-    local myTeam = localPlayer.Team
-    local nearest, bestDist = nil, range
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= localPlayer then
-            if not (KA_TEAM_CHECK and myTeam and plr.Team == myTeam) then
-                local c = plr.Character
-                local hum = c and c:FindFirstChildOfClass("Humanoid")
-                local root = c and c:FindFirstChild("HumanoidRootPart")
-                if hum and hum.Health > 0 and root then
-                    local d = (root.Position - hrp.Position).Magnitude
-                    if d <= bestDist then
-                        bestDist = d
-                        nearest  = root
-                    end
-                end
-            end
-        end
-    end
-    return nearest
-end
-
-local function startKillAura()
-    if kaConn then kaConn:Disconnect() kaConn = nil end
-    ensureKARing()
-    kaConn = RunService.RenderStepped:Connect(function()
-        if not killAuraEnabled then return end
-        local char = localPlayer.Character
-        local hrp  = char and char:FindFirstChild("HumanoidRootPart")
-        local hum  = char and char:FindFirstChildOfClass("Humanoid")
-        if not (hrp and hum) then return end
-
-        if kaRingPart then
-            kaRingPart.Size   = Vector3.new(killAuraRange*2, 0.2, killAuraRange*2)
-            kaRingPart.CFrame = CFrame.new(hrp.Position) * CFrame.Angles(math.rad(90),0,0)
-        end
-
-        local targetRoot = getNearestEnemyInRange(killAuraRange)
-        if targetRoot then
-            if KA_FACE_TARGET then
-                local myPos  = hrp.Position
-                local tgtPos = targetRoot.Position
-                local look   = CFrame.new(myPos, Vector3.new(tgtPos.X, myPos.Y, tgtPos.Z))
-                hrp.CFrame   = hrp.CFrame:Lerp(look, 0.35)
-            end
-            tryAttackNow()
-        end
-    end)
-end
-local function stopKillAura()
-    if kaConn then kaConn:Disconnect() kaConn = nil end
-    removeKARing()
-end
-
 --==================================================
--- PANEL DE AJUSTES (simple y seguro)
---==================================================
-local settingsFrame = Instance.new("Frame", screenGui)
-settingsFrame.Name                   = "SettingsPanel"
-settingsFrame.Size                   = UDim2.new(0,260,0,210)
-settingsFrame.Position               = UDim2.new(0.31, -130, 0.52, -105)
-settingsFrame.BackgroundColor3       = Color3.fromRGB(18,18,24)
-settingsFrame.Visible                = false
-settingsFrame.Active                 = true
-settingsFrame.ZIndex                 = 110
-pcall(function() Instance.new("UICorner", settingsFrame).CornerRadius = UDim.new(0,10) end)
-
-local setTitle = Instance.new("TextLabel", settingsFrame)
-setTitle.Size                   = UDim2.new(1,-40,0,24)
-setTitle.Position               = UDim2.new(0,12,0,8)
-setTitle.BackgroundTransparency = 1
-setTitle.Text                   = "Ajustes"
-setTitle.Font                   = Enum.Font.GothamBold
-setTitle.TextSize               = 20
-setTitle.TextColor3             = Color3.fromRGB(230,240,245)
-setTitle.TextXAlignment         = Enum.TextXAlignment.Left
-setTitle.ZIndex                 = 111
-
-local setClose = Instance.new("TextButton", settingsFrame)
-setClose.Size             = UDim2.new(0,24,0,24)
-setClose.Position         = UDim2.new(1,-32,0,8)
-setClose.BackgroundColor3 = Color3.fromRGB(235,70,70)
-setClose.TextColor3       = Color3.new(1,1,1)
-setClose.Text             = "×"
-setClose.Font             = Enum.Font.GothamBold
-setClose.TextSize         = 18
-setClose.BorderSizePixel  = 0
-setClose.ZIndex           = 111
-pcall(function() Instance.new("UICorner", setClose).CornerRadius = UDim.new(0.5,0) end)
-
-local function createQuickField(y, labelText, getValue, setValue, step, minV, maxV)
-    local holder = Instance.new("Frame", settingsFrame)
-    holder.Size = UDim2.new(1,-20,0,30)
-    holder.Position = UDim2.new(0,10,0,y)
-    holder.BackgroundTransparency = 1
-    holder.ZIndex = 111
-
-    local lbl = Instance.new("TextLabel", holder)
-    lbl.Size = UDim2.new(0.6,0,1,0)
-    lbl.BackgroundTransparency = 1
-    lbl.Text = labelText
-    lbl.Font = Enum.Font.GothamSemibold
-    lbl.TextSize = 14
-    lbl.TextXAlignment = Enum.TextXAlignment.Left
-    lbl.TextColor3 = Color3.fromRGB(220,225,235)
-
-    local minus = Instance.new("TextButton", holder)
-    minus.Size = UDim2.new(0,28,0,24)
-    minus.Position = UDim2.new(0.62,0,0,3)
-    minus.Text = "–"
-    minus.Font = Enum.Font.GothamBold
-    minus.TextSize = 18
-    minus.BackgroundColor3 = Color3.fromRGB(45,45,55)
-    minus.TextColor3 = Color3.fromRGB(240,240,255)
-    minus.BorderSizePixel = 0
-    pcall(function() Instance.new("UICorner", minus).CornerRadius = UDim.new(0,6) end)
-
-    local val = Instance.new("TextLabel", holder)
-    val.Size = UDim2.new(0,56,0,24)
-    val.Position = UDim2.new(0.62,30,0,3)
-    val.BackgroundTransparency = 0.2
-    val.BackgroundColor3 = Color3.fromRGB(30,30,40)
-    val.Text = tostring(getValue())
-    val.Font = Enum.Font.GothamBold
-    val.TextSize = 14
-    val.TextColor3 = Color3.fromRGB(220,230,240)
-    val.BorderSizePixel = 0
-    pcall(function() Instance.new("UICorner", val).CornerRadius = UDim.new(0,6) end)
-
-    local plus = Instance.new("TextButton", holder)
-    plus.Size = UDim2.new(0,28,0,24)
-    plus.Position = UDim2.new(0.62,90,0,3)
-    plus.Text = "+"
-    plus.Font = Enum.Font.GothamBold
-    plus.TextSize = 18
-    plus.BackgroundColor3 = Color3.fromRGB(45,45,55)
-    plus.TextColor3 = Color3.fromRGB(240,240,255)
-    plus.BorderSizePixel = 0
-    pcall(function() Instance.new("UICorner", plus).CornerRadius = UDim.new(0,6) end)
-
-    local function clampSet(nv)
-        nv = math.clamp(nv, minV, maxV)
-        setValue(nv)
-        val.Text = tostring(math.floor(nv+0.5))
-    end
-
-    minus.MouseButton1Click:Connect(function() clampSet(getValue() - step) end)
-    plus.MouseButton1Click:Connect(function()  clampSet(getValue() + step) end)
-
-    return holder
-end
-
--- Campos rápidos (ligeros y sin sliders para evitar riesgos en dispositivos)
-createQuickField( 42, "Walk Speed",     function() return currentSpeed or 32 end,      function(v)
-    if speedEnabled then
-        local char = localPlayer.Character
-        local hum  = char and char:FindFirstChildOfClass("Humanoid")
-        if hum then currentSpeed = math.clamp(v,10,WALK_MAX_SPEED); hum.WalkSpeed = currentSpeed end
-    end
-end, 2, 10, WALK_MAX_SPEED)
-
-createQuickField( 78, "Noclip Speed",   function() return noclipSpeed end,             function(v)
-    noclipSpeed = math.clamp(v,10,NOCLIP_MAX_SPEED)
-end, 4, 10, NOCLIP_MAX_SPEED)
-
-createQuickField(114, "Lock Range",     function() return LOCK_RANGE end,              function(v)
-    LOCK_RANGE = math.clamp(v,100,300)
-end, 10, 100, 300)
-
-createQuickField(150, "FastAttack Hz",  function() return fastAtkRate end,             function(v)
-    fastAtkRate = math.clamp(v,2,25)
-end, 1, 2, 25)
-
-createQuickField(186, "KillAura Range", function() return killAuraRange end,           function(v)
-    killAuraRange = math.clamp(v,8,40)
-end, 2, 8, 40)
-
-setClose.MouseButton1Click:Connect(function()
-    settingsFrame.Visible = false
-    logEvent("Ajustes aplicados")
-end)
-
-settingsBtn.MouseButton1Click:Connect(function()
-    settingsFrame.Visible = not settingsFrame.Visible
-end)
-
---==================================================
--- REAPARECER
+-- REAPARECER: reactivar lo que esté ON
 --==================================================
 localPlayer.CharacterAdded:Connect(function()
     if knockbackEnabled then disableKnockback() enableKnockback() end
     if antiHitEnabled  then enableAntiHit() end
     if speedEnabled    then maintainSpeed() end
     if floorEnabled    then enableFloor() end
-    if fastAtkEnabled  then startFastAttack() end
-    if killAuraEnabled then startKillAura() end
-    if lockBtnVisible  then quickLockBtn.Visible = true end
-    if lockActive      then startLock() end
+    -- Lock: si el botón rápido estaba visible, lo dejamos visible; si además estaba activo, reanudamos
+    if lockBtnVisible then quickLockBtn.Visible = true end
+    if lockActive then startLock() end
 end)
 
 --==================================================
--- BOTONES MENÚ
+-- CONEXIONES DE BOTONES (MENÚ)
 --==================================================
 flyToggleBtn.MouseButton1Click:Connect(function()
     flying = not flying
     flyToggleBtn.Text = flying and "Fly ON" or "Fly OFF"
     ascendBtn.Visible  = flying or noclipEnabled
     descendBtn.Visible = flying or noclipEnabled
-    if flying then
-        if noclipEnabled then
-            noclipEnabled = false
-            noclipToggleBtn.Text = "Noclip OFF"
-            stopNoclip()
-        end
-        startFly()
-    else
-        ascend=false; descend=false; stopFly()
-    end
+    if flying then startFly() else ascend=false descend=false stopFly() end
     logEvent("Fly: " .. (flying and "ON" or "OFF"))
 end)
 
 espToggleBtn.MouseButton1Click:Connect(function()
-    espEnabled = not espEnabled
-    espToggleBtn.Text = espEnabled and "ESP ON" or "ESP OFF"
-    if espEnabled then enableESP() else disableESP() end
+    if espEnabled then
+        espEnabled = false; disableESP()
+        espToggleBtn.Text = "ESP OFF"
+    else
+        espEnabled = true; enableESP()
+        espToggleBtn.Text = "ESP ON"
+    end
     logEvent("ESP: " .. (espEnabled and "ON" or "OFF"))
 end)
 
@@ -1111,10 +737,12 @@ speedToggleBtn.MouseButton1Click:Connect(function()
 end)
 
 lockToggleBtn.MouseButton1Click:Connect(function()
-    lockBtnVisible       = not lockBtnVisible
+    lockBtnVisible = not lockBtnVisible
     quickLockBtn.Visible = lockBtnVisible
-    lockToggleBtn.Text   = lockBtnVisible and "Lock Btn ON" or "Lock Btn OFF"
-    if not lockBtnVisible and lockActive then stopLock() end
+    lockToggleBtn.Text = lockBtnVisible and "Lock Btn ON" or "Lock Btn OFF"
+    if not lockBtnVisible and lockActive then
+        stopLock()
+    end
     logEvent("Lock Button: " .. (lockBtnVisible and "VISIBLE" or "OCULTO"))
 end)
 
@@ -1142,23 +770,35 @@ noclipToggleBtn.MouseButton1Click:Connect(function()
 end)
 
 antiHitToggleBtn.MouseButton1Click:Connect(function()
-    antiHitEnabled = not antiHitEnabled
-    antiHitToggleBtn.Text = antiHitEnabled and "Anti-Hit ON" or "Anti-Hit OFF"
-    if antiHitEnabled then enableAntiHit() else disableAntiHit() end
+    if antiHitEnabled then
+        antiHitEnabled = false; disableAntiHit()
+        antiHitToggleBtn.Text = "Anti-Hit OFF"
+    else
+        antiHitEnabled = true; enableAntiHit()
+        antiHitToggleBtn.Text = "Anti-Hit ON"
+    end
     logEvent("Anti-Hit: " .. (antiHitEnabled and "ON" or "OFF"))
 end)
 
 knockToggleBtn.MouseButton1Click:Connect(function()
-    knockbackEnabled = not knockbackEnabled
-    knockToggleBtn.Text = knockbackEnabled and "Knockback ON" or "Knockback OFF"
-    if knockbackEnabled then enableKnockback() else disableKnockback() end
+    if knockbackEnabled then
+        knockbackEnabled = false; disableKnockback()
+        knockToggleBtn.Text = "Knockback OFF"
+    else
+        knockbackEnabled = true; enableKnockback()
+        knockToggleBtn.Text = "Knockback ON"
+    end
     logEvent("Knockback: " .. (knockbackEnabled and "ON" or "OFF"))
 end)
 
 floorToggleBtn.MouseButton1Click:Connect(function()
-    floorEnabled = not floorEnabled
-    floorToggleBtn.Text = floorEnabled and "Floor ON" or "Floor OFF"
-    if floorEnabled then enableFloor() else disableFloor() end
+    if floorEnabled then
+        floorEnabled = false; disableFloor()
+        floorToggleBtn.Text = "Floor OFF"
+    else
+        floorEnabled = true; enableFloor()
+        floorToggleBtn.Text = "Floor ON"
+    end
     logEvent("Floor: " .. (floorEnabled and "ON" or "OFF"))
 end)
 
@@ -1169,57 +809,42 @@ hudToggleBtn.MouseButton1Click:Connect(function()
     if hudEnabled then logEvent("HUD visible") end
 end)
 
-fastAtkToggleBtn.MouseButton1Click:Connect(function()
-    fastAtkEnabled = not fastAtkEnabled
-    fastAtkToggleBtn.Text = fastAtkEnabled and "Golpe Rápido ON" or "Golpe Rápido OFF"
-    if fastAtkEnabled then startFastAttack() else stopFastAttack() end
-    logEvent("Golpe Rápido: " .. (fastAtkEnabled and "ON" or "OFF"))
-end)
-
-kaToggleBtn.MouseButton1Click:Connect(function()
-    killAuraEnabled = not killAuraEnabled
-    kaToggleBtn.Text = killAuraEnabled and "Kill Aura ON" or "Kill Aura OFF"
-    if killAuraEnabled then startKillAura() else stopKillAura() end
-    logEvent(("Kill Aura: %s (r=%d)"):format(killAuraEnabled and "ON" or "OFF", killAuraRange))
-end)
-
--- ABRIR/CERRAR MENÚ + LOCK rápido
-openBtn.MouseButton1Click:Connect(function()
-    dragFrame.Visible = false
-    menuFrame.Visible = true
-end)
-closeBtn.MouseButton1Click:Connect(function()
-    menuFrame.Visible = false
-    dragFrame.Visible = true
-end)
+--==================================================
+-- QUICK LOCK BUTTON (juego)
+--==================================================
 quickLockBtn.MouseButton1Click:Connect(function()
-    if not lockActive then startLock() else stopLock() end
+    if not lockActive then
+        startLock()
+    else
+        stopLock()
+    end
 end)
 
--- FLECHAS LATERALES
+--==================================================
+-- VELOCIDAD con flechas y ascenso/descenso
+--==================================================
 speedUpBtn.MouseButton1Click:Connect(function()
     if speedTarget == "walk" and speedEnabled then
         local char = localPlayer.Character
         local hum  = char and char:FindFirstChildOfClass("Humanoid")
         if hum then
-            currentSpeed = math.min((hum.WalkSpeed or 16) + speedIncrement, WALK_MAX_SPEED)
+            currentSpeed = math.min(hum.WalkSpeed + speedIncrement, maxSpeed)
             hum.WalkSpeed = currentSpeed
             logEvent(("Speed + → %d"):format(currentSpeed))
         end
     elseif speedTarget == "noclip" and noclipEnabled then
-        noclipSpeed  = math.min(noclipSpeed + speedIncrement, NOCLIP_MAX_SPEED)
+        noclipSpeed  = math.min(noclipSpeed + speedIncrement, 200)
         logEvent(("Noclip Speed + → %d"):format(noclipSpeed))
     end
 end)
+
 speedDownBtn.MouseButton1Click:Connect(function()
     if speedTarget == "walk" and speedEnabled then
         local char = localPlayer.Character
         local hum  = char and char:FindFirstChildOfClass("Humanoid")
         if hum then
-            local minSpeed = originalWalkSpeed or hum.WalkSpeed or 16
-            currentSpeed   = math.max((hum.WalkSpeed or 16) - speedIncrement, 10)
-            currentSpeed   = math.max(currentSpeed, minSpeed)
-            currentSpeed   = math.min(currentSpeed, WALK_MAX_SPEED)
+            local minSpeed = originalWalkSpeed or hum.WalkSpeed
+            currentSpeed   = math.max(hum.WalkSpeed - speedIncrement, minSpeed)
             hum.WalkSpeed  = currentSpeed
             logEvent(("Speed - → %d"):format(currentSpeed))
         end
@@ -1228,13 +853,20 @@ speedDownBtn.MouseButton1Click:Connect(function()
         logEvent(("Noclip Speed - → %d"):format(noclipSpeed))
     end
 end)
+
 ascendBtn.MouseButton1Down:Connect(function() ascend = true end)
 ascendBtn.MouseButton1Up:Connect(function()   ascend = false end)
 descendBtn.MouseButton1Down:Connect(function() descend = true end)
 descendBtn.MouseButton1Up:Connect(function()   descend = false end)
 
--- Señal de que todo cargó bien (se oculta sola)
-statusLabel.Text = "[OK] Script cargado."
-delay(2.5, function() if statusLabel and statusLabel.Parent then statusLabel:Destroy() end end)
+-- Mostrar/ocultar menú principal
+openBtn.MouseButton1Click:Connect(function()
+    dragFrame.Visible = false
+    menuFrame.Visible = true
+end)
+closeBtn.MouseButton1Click:Connect(function()
+    menuFrame.Visible = false
+    dragFrame.Visible = true
+end)
 
-print("✅ Script estable cargado (UI clásica + seguridad en visuales + FastAttack/KillAura opcional)")
+print("✅ Script cargado (BASE ESTABLE, sin extras)")
