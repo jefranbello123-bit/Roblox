@@ -1,4 +1,5 @@
--- Script completo: Fly, ESP (rosa), Speed, Lock Quick Button, Noclip, Anti-Hit, Knockback, Floor y HUD + mejoras
+-- Script completo: Fly, ESP, Speed, Lock Quick Button, Noclip, Anti-Hit, Knockback, Floor, HUD y Ajustes
+-- ✅ FIX de arrastre para ☰ (abrir menú) y LOCK: ahora se arrastran suave, con "zona muerta" anti-click fantasma.
 -- Pensado para uso en tus propios juegos/pruebas. Respeta los Términos de Roblox.
 
 --==================================================
@@ -22,11 +23,11 @@ local NOCLIP_MAX_SPEED      = 200
 local FLY_DEFAULT_SPEED     = 50
 local NOCLIP_DEFAULT_SPEED  = 50
 
--- Lock-on: ajustables en el panel "Ajustes"
-local LOCK_DOT_THRESHOLD    = 0.90 -- se puede ajustar 0.70 - 0.98
-local LOCK_RANGE            = 220  -- se puede ajustar 100 - 300
-local LOCK_SMOOTH_ALPHA     = 0.25 -- suavizado cámara (0 = nada, 1 = instantáneo)
-local LOCK_LOSS_GRACE       = 0.4  -- segundos que mantiene objetivo fuera de umbral antes de soltar
+-- Lock-on por defecto (ajustables en panel de Ajustes)
+local LOCK_DOT_THRESHOLD    = 0.90 -- 0.70 - 0.98
+local LOCK_RANGE            = 220  -- 100 - 300
+local LOCK_SMOOTH_ALPHA     = 0.25 -- 0..1 (lerp)
+local LOCK_LOSS_GRACE       = 0.40 -- segundos
 
 --==================================================
 -- GUI PRINCIPAL
@@ -38,7 +39,7 @@ screenGui.IgnoreGuiInset = true
 screenGui.DisplayOrder   = 100
 screenGui.Parent         = playerGui
 
--- Botón circular (☰) para abrir menú (movible)
+-- Botón circular (☰) en un contenedor movible
 local dragFrame = Instance.new("Frame", screenGui)
 dragFrame.Size                   = UDim2.new(0,60,0,60)
 dragFrame.Position               = UDim2.new(0.5,-30,0.5,-30)
@@ -55,6 +56,7 @@ openBtn.TextSize         = 28
 openBtn.Text             = "☰"
 openBtn.BorderSizePixel  = 0
 openBtn.ZIndex           = 101
+openBtn.Active           = true
 Instance.new("UICorner", openBtn).CornerRadius = UDim.new(0.5,0)
 
 -- Menú principal (5 filas x 2 columnas)
@@ -116,10 +118,9 @@ local antiHitToggleBtn = createToggleButton("AntiHitToggle", "Anti-Hit OFF",    
 local knockToggleBtn   = createToggleButton("KnockToggle",   "Knockback OFF",   UDim2.new(0,10,0,190), Color3.fromRGB(144,238,144)) -- verde claro
 local floorToggleBtn   = createToggleButton("FloorToggle",   "Floor OFF",       UDim2.new(0,130,0,190),Color3.fromRGB(210,180,140)) -- tan
 local hudToggleBtn     = createToggleButton("HUDToggle",     "HUD OFF",         UDim2.new(0,10,0,240), Color3.fromRGB(80,120,200))  -- HUD
--- Nuevo: Ajustes (ocupa la casilla libre, 5x2)
 local settingsBtn      = createToggleButton("SettingsBtn",   "Ajustes",         UDim2.new(0,130,0,240),Color3.fromRGB(50,170,160))  -- teal
 
--- Botones laterales (ascenso/descenso y speed +/-) — reubicados para móvil
+-- Botones laterales (móvil)
 local ascendBtn, descendBtn  = Instance.new("TextButton"), Instance.new("TextButton")
 local speedUpBtn, speedDownBtn = Instance.new("TextButton"), Instance.new("TextButton")
 ascendBtn.Parent, descendBtn.Parent, speedUpBtn.Parent, speedDownBtn.Parent = screenGui, screenGui, screenGui, screenGui
@@ -138,12 +139,10 @@ local function styleSide(btn, pos, color, txt)
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0.4,0)
 end
 
--- Colocación pensada para no tapar el botón de salto (esquina inferior derecha)
--- Fly/Noclip ↑↓ más al borde; Speed +/- un poco más hacia el centro
-styleSide(ascendBtn,    UDim2.new(0.86,0,0.45,0), Color3.fromRGB(0,170,255), "↑")   -- cyan
-styleSide(descendBtn,   UDim2.new(0.86,0,0.61,0), Color3.fromRGB(0,120,200), "↓")   -- cyan oscuro
-styleSide(speedUpBtn,   UDim2.new(0.72,0,0.45,0), Color3.fromRGB(50,205,50), "↑")   -- verde lima
-styleSide(speedDownBtn, UDim2.new(0.72,0,0.61,0), Color3.fromRGB(46,139,87), "↓")   -- verde mar
+styleSide(ascendBtn,    UDim2.new(0.86,0,0.45,0), Color3.fromRGB(0,170,255), "↑")
+styleSide(descendBtn,   UDim2.new(0.86,0,0.61,0), Color3.fromRGB(0,120,200), "↓")
+styleSide(speedUpBtn,   UDim2.new(0.72,0,0.45,0), Color3.fromRGB(50,205,50), "↑")
+styleSide(speedDownBtn, UDim2.new(0.72,0,0.61,0), Color3.fromRGB(46,139,87), "↓")
 
 --==================================================
 -- ESTADO
@@ -260,11 +259,11 @@ end
 local function colorForMessage(msg)
     msg = msg:lower()
     if msg:find("on") or msg:find("visible") then
-        return Color3.fromRGB(160,230,180) -- verde suave
+        return Color3.fromRGB(160,230,180)
     elseif msg:find("off") or msg:find("oculto") or msg:find("perdido") then
-        return Color3.fromRGB(240,170,170) -- rojo suave
+        return Color3.fromRGB(240,170,170)
     elseif msg:find("speed") or msg:find("noclip") then
-        return Color3.fromRGB(220,210,150) -- dorado suave
+        return Color3.fromRGB(220,210,150)
     else
         return Color3.fromRGB(230,230,240)
     end
@@ -286,7 +285,7 @@ local function logEvent(msg)
     lab.Parent                 = hudScroll
     trimHUD(14)
     updateCanvas()
-    Debris:AddItem(lab, 14) -- cada entrada dura ~14s
+    Debris:AddItem(lab, 14)
 end
 
 hudClose.MouseButton1Click:Connect(function()
@@ -315,85 +314,110 @@ quickLockBtn.Text             = "LOCK"
 quickLockBtn.BorderSizePixel  = 0
 quickLockBtn.Visible          = false
 quickLockBtn.ZIndex           = 101
+quickLockBtn.Active           = true
 Instance.new("UICorner", quickLockBtn).CornerRadius = UDim.new(0.5,0)
 
 --==================================================
--- UTILIDADES (drag, clamped, viewport)
+-- UTILIDADES DE ARRASTRE (con “zona muerta” anti-click)
 --==================================================
--- Drag genérico
-local draggingFlag, startPosInput, startPosGui
-local function beginDrag(input, gui)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        draggingFlag  = true
-        startPosInput = input.Position
-        startPosGui   = gui.Position
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then draggingFlag = false end
-        end)
-    end
-end
-local function clampToViewport(gui)
-    local cam      = Workspace.CurrentCamera
-    if not cam then return end
+local function clampGuiToViewport(gui)
+    local cam = Workspace.CurrentCamera
+    if not cam or not gui or not gui.Parent then return end
     local viewport = cam.ViewportSize
-    local guiSize  = gui.AbsoluteSize
-    local maxX     = math.max(0, viewport.X - guiSize.X)
-    local maxY     = math.max(0, viewport.Y - guiSize.Y)
-    local newX     = math.clamp(gui.AbsolutePosition.X, 0, maxX)
-    local newY     = math.clamp(gui.AbsolutePosition.Y, 0, maxY)
-    gui.Position   = UDim2.new(0, newX, 0, newY)
-end
-local function updateDrag(input, gui)
-    if draggingFlag and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-        local delta = input.Position - startPosInput
-        local newPos= UDim2.new(startPosGui.X.Scale,startPosGui.X.Offset+delta.X,
-                                 startPosGui.Y.Scale,startPosGui.Y.Offset+delta.Y)
-        gui.Position = newPos
-        clampToViewport(gui)
-    end
-end
-local function makeDraggable(gui)
-    gui.InputBegan:Connect(function(input) beginDrag(input, gui) end)
-    gui.InputChanged:Connect(function(input) updateDrag(input, gui) end)
+    local size     = gui.AbsoluteSize
+    local pos      = gui.Position
+    local x = math.clamp(pos.X.Offset, 0, math.max(0, viewport.X - size.X))
+    local y = math.clamp(pos.Y.Offset, 0, math.max(0, viewport.Y - size.Y))
+    gui.Position = UDim2.new(0,x,0,y)
 end
 
-makeDraggable(dragFrame)
-makeDraggable(menuFrame)
-makeDraggable(openBtn)
-makeDraggable(hudFrame)
-makeDraggable(quickLockBtn)
-
--- Ajuste al rotar/cambiar tamaño de pantalla
-local function clampAll()
-    clampToViewport(dragFrame)
-    clampToViewport(menuFrame)
-    clampToViewport(hudFrame)
-    clampToViewport(quickLockBtn)
-end
-Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
-    task.defer(function()
-        local cam = Workspace.CurrentCamera
-        if cam then
-            cam:GetPropertyChangedSignal("ViewportSize"):Connect(function()
-                clampAll()
-            end)
+-- Arrastre simple para frames (menu, HUD, etc.) con estado por-instancia
+local function makeFreeDraggable(gui)
+    local dragging, startPosGui, startPosInput = false, nil, nil
+    gui.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging       = true
+            startPosInput  = input.Position
+            startPosGui    = gui.Position
         end
     end)
-end)
-if Workspace.CurrentCamera then
-    Workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(clampAll)
+    gui.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta  = input.Position - startPosInput
+            gui.Position = UDim2.new(startPosGui.X.Scale, startPosGui.X.Offset + delta.X, startPosGui.Y.Scale, startPosGui.Y.Offset + delta.Y)
+            clampGuiToViewport(gui)
+        end
+    end)
+    UserInput.InputEnded:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+            dragging = false
+        end
+    end)
 end
 
--- Colisiones personaje (para noclip)
-local function setCharacterCollision(enabled)
-    local char = localPlayer.Character
-    if not char then return end
-    for _, part in ipairs(char:GetDescendants()) do
-        if part:IsA("BasePart") then
-            part.CanCollide = enabled
-        end
-    end
+-- Arrastre para botones con click corto (no dispara click si se movió > deadzone)
+local function makeDraggableButton(button, moveGui, onShortTap, deadzone)
+    deadzone = deadzone or 6
+    local dragging = false
+    local moved    = false
+    local startPosGui, startPosInput
+
+    button.InputBegan:Connect(function(input)
+        if input.UserInputType ~= Enum.UserInputType.Touch and input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+        dragging      = true
+        moved         = false
+        startPosGui   = moveGui.Position
+        startPosInput = input.Position
+
+        -- Seguir ese mismo input hasta terminar
+        local moveConn, endConn
+        moveConn = UserInput.InputChanged:Connect(function(changed)
+            if not dragging then return end
+            if changed == input then
+                local delta = changed.Position - startPosInput
+                if math.abs(delta.X) > deadzone or math.abs(delta.Y) > deadzone then
+                    moved = true
+                end
+                moveGui.Position = UDim2.new(
+                    startPosGui.X.Scale, startPosGui.X.Offset + delta.X,
+                    startPosGui.Y.Scale, startPosGui.Y.Offset + delta.Y
+                )
+                clampGuiToViewport(moveGui)
+            end
+        end)
+        endConn = input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+                if moveConn then moveConn:Disconnect() end
+                if endConn  then endConn:Disconnect()  end
+                if not moved and onShortTap then
+                    onShortTap()
+                end
+            end
+        end)
+    end)
 end
+
+-- Hacer arrastrables (libre) paneles grandes
+makeFreeDraggable(menuFrame)
+makeFreeDraggable(hudFrame)
+
+-- Re-clamp en cambios de viewport
+local function reclampAll()
+    clampGuiToViewport(dragFrame)
+    clampGuiToViewport(menuFrame)
+    clampGuiToViewport(hudFrame)
+    clampGuiToViewport(quickLockBtn)
+end
+local function hookViewportSignals()
+    local cam = Workspace.CurrentCamera
+    if not cam then
+        Workspace:GetPropertyChangedSignal("CurrentCamera"):Once(hookViewportSignals)
+        return
+    end
+    cam:GetPropertyChangedSignal("ViewportSize"):Connect(reclampAll)
+end
+hookViewportSignals()
 
 --==================================================
 -- FLY
@@ -442,7 +466,7 @@ local function enableESP()
         local existing = currentHighlights[plr]
         if not existing then
             local h = Instance.new("Highlight")
-            h.FillColor           = Color3.fromRGB(255,20,147) -- deep pink
+            h.FillColor           = Color3.fromRGB(255,20,147)
             h.FillTransparency    = 0.5
             h.OutlineColor        = Color3.new(1,1,1)
             h.OutlineTransparency = 0
@@ -532,7 +556,7 @@ local function disableSpeed()
 end
 
 --==================================================
--- LOCK-ON (usado por el botón rápido) con suavizado y tolerancia
+-- LOCK-ON (rápido) con lerp y gracia de pérdida
 --==================================================
 local function findTarget()
     local cam = Workspace.CurrentCamera
@@ -563,15 +587,15 @@ end
 
 local function startLock()
     if lockConnection then lockConnection:Disconnect() lockConnection = nil end
-    local target, dot = findTarget()
-    targetCharacter = target
+    local t, dot = findTarget()
+    targetCharacter = t
     if not targetCharacter then
         logEvent("Lock: sin objetivo")
         return
     end
     lockActive = true
     lastGoodDotTime = time()
-    quickLockBtn.BackgroundColor3 = Color3.fromRGB(160,120,255) -- activo
+    quickLockBtn.BackgroundColor3 = Color3.fromRGB(160,120,255)
     logEvent("Lock: ON → " .. (targetCharacter.Name or "objetivo"))
     lockConnection = RunService.RenderStepped:Connect(function(dt)
         if not targetCharacter or not targetCharacter.Parent then
@@ -584,33 +608,35 @@ local function startLock()
         local cam = Workspace.CurrentCamera
         if cam then
             local camPos    = cam.CFrame.Position
-            local targetHRP = targetCharacter:FindFirstChild("HumanoidRootPart")
-            local lookAtPos = targetHRP and targetHRP.Position or targetCharacter:GetPivot().Position
+            local root      = targetCharacter:FindFirstChild("HumanoidRootPart")
+            if not root then return end
+            local lookAtPos = root.Position
 
-            -- Evaluar mantenimiento (tolerancia temporal)
-            local toTarget = (lookAtPos - camPos)
-            local dist     = toTarget.Magnitude
-            local dir      = (dist > 0) and (toTarget / dist) or cam.CFrame.LookVector
-            local dotNow   = dir:Dot(cam.CFrame.LookVector)
+            local toTarget  = (lookAtPos - camPos)
+            local dist      = toTarget.Magnitude
+            local dir       = (dist > 0) and (toTarget / dist) or cam.CFrame.LookVector
+            local dotNow    = dir:Dot(cam.CFrame.LookVector)
 
             if dist <= LOCK_RANGE and dotNow >= LOCK_DOT_THRESHOLD then
                 lastGoodDotTime = time()
             elseif (time() - lastGoodDotTime) > LOCK_LOSS_GRACE then
-                -- Intentar reacquirir mejor objetivo antes de soltar
-                local newT, newDot = findTarget()
-                if newT and newDot then
+                local newT = select(1, findTarget())
+                if newT then
                     targetCharacter = newT
                     lastGoodDotTime = time()
-                    logEvent("Lock: objetivo cambiado → " .. (targetCharacter.Name or "objetivo"))
+                    logEvent("Lock: objetivo cambiado → " .. (targetCharacter.Name or "?"))
                 else
-                    stopLock()
+                    if lockConnection then lockConnection:Disconnect() lockConnection = nil end
+                    lockActive = false
+                    quickLockBtn.BackgroundColor3 = Color3.fromRGB(120,200,255)
+                    logEvent("Lock: OFF (sin objetivo)")
                     return
                 end
             end
 
-            -- Suavizado de cámara
+            -- Suavizado
             local targetCF = CFrame.lookAt(camPos, lookAtPos)
-            local alpha = 1 - (1-LOCK_SMOOTH_ALPHA)^(math.max(dt,0.016) * 60) -- consistente por frame
+            local alpha = 1 - (1-LOCK_SMOOTH_ALPHA)^(math.max(dt,0.016) * 60)
             cam.CFrame = cam.CFrame:Lerp(targetCF, alpha)
         end
     end)
@@ -626,6 +652,16 @@ end
 --==================================================
 -- NOCLIP
 --==================================================
+local function setCharacterCollision(enabled)
+    local char = localPlayer.Character
+    if not char then return end
+    for _, part in ipairs(char:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = enabled
+        end
+    end
+end
+
 local function startNoclip()
     local char = localPlayer.Character or localPlayer.CharacterAdded:Wait()
     local hrp  = char:FindFirstChild("HumanoidRootPart")
@@ -670,7 +706,7 @@ local function stopNoclip()
 end
 
 --==================================================
--- ANTI-HIT MEJORADO (respeta saltos y controles ↑/↓)
+-- ANTI-HIT (respeta saltos y ↑/↓)
 --==================================================
 local function enableAntiHit()
     local char = localPlayer.Character
@@ -704,30 +740,25 @@ local function enableAntiHit()
             local root  = char and char:FindFirstChild("HumanoidRootPart")
             if not (hum and root) then return end
 
-            -- Objetivo horizontal: neutraliza empujes manteniendo control del jugador
             local move    = hum.MoveDirection
             local desired = Vector3.new(0,0,0)
-            local baseSpeed = noclipEnabled and noclipSpeed or hum.WalkSpeed
-            if move.Magnitude > 0 then desired = move.Unit * baseSpeed end
+            local base    = noclipEnabled and noclipSpeed or hum.WalkSpeed
+            if move.Magnitude > 0 then desired = move.Unit * base end
 
-            local currentVel = root.AssemblyLinearVelocity
-            local yVel = currentVel.Y
-
-            -- Respetar saltos y controles ↑/↓, y no interferir con Fly/Noclip
+            local v  = root.AssemblyLinearVelocity
+            local y  = v.Y
             local jumping = hum:GetState() == Enum.HumanoidStateType.Jumping or hum.Jump
             if not (jumping or ascend or descend or noclipEnabled or flying) then
-                -- Acelerar descenso solo cuando realmente está en el aire (altura > ~6)
                 local rayParams = RaycastParams.new()
                 rayParams.FilterDescendantsInstances = {char}
                 rayParams.FilterType = Enum.RaycastFilterType.Exclude
                 local ray = Workspace:Raycast(root.Position, Vector3.new(0,-12,0), rayParams)
-                local airborne = (ray == nil) -- nada debajo a 12 studs
+                local airborne = (ray == nil)
                 if airborne then
-                    yVel = math.max(yVel, -80) -- cae más rápido pero sin bloquear saltos
+                    y = math.max(y, -80)
                 end
             end
-
-            root.AssemblyLinearVelocity = Vector3.new(desired.X, yVel, desired.Z)
+            root.AssemblyLinearVelocity = Vector3.new(desired.X, y, desired.Z)
         end)
     end
 end
@@ -807,7 +838,7 @@ local function disableFloor()
 end
 
 --==================================================
--- PANEL DE AJUSTES (sliders) — movible
+-- PANEL DE AJUSTES (sliders)
 --==================================================
 local settingsFrame = Instance.new("Frame", screenGui)
 settingsFrame.Name                   = "SettingsPanel"
@@ -818,7 +849,7 @@ settingsFrame.Visible                = false
 settingsFrame.Active                 = true
 settingsFrame.ZIndex                 = 110
 Instance.new("UICorner", settingsFrame).CornerRadius = UDim.new(0,8)
-makeDraggable(settingsFrame)
+makeFreeDraggable(settingsFrame)
 
 local setTitle = Instance.new("TextLabel", settingsFrame)
 setTitle.Size                   = UDim2.new(1,-40,0,24)
@@ -895,7 +926,6 @@ local function createSlider(parent, y, labelText, minVal, maxVal, defaultVal, de
     knob.ZIndex = 113
     Instance.new("UICorner", knob).CornerRadius = UDim.new(0.5,0)
 
-    -- arrastrable
     local dragging = false
     local currentValue = defaultVal
     local function setVisualByValue(v)
@@ -959,19 +989,17 @@ local function createSlider(parent, y, labelText, minVal, maxVal, defaultVal, de
 end
 
 -- Sliders:
-local walkSlider   = createSlider(settingsFrame,  36, "Walk Speed",   10, WALK_MAX_SPEED,  32, 0, Color3.fromRGB(255,165,0)) -- naranja
-local noclipSlider = createSlider(settingsFrame,  92, "Noclip Speed", 10, NOCLIP_MAX_SPEED, NOCLIP_DEFAULT_SPEED, 0, Color3.fromRGB(255,99,71)) -- tomate
-local dotSlider    = createSlider(settingsFrame, 148, "Lock Dot",     0.70, 0.98, LOCK_DOT_THRESHOLD, 2, Color3.fromRGB(120,200,255)) -- azul claro
+local walkSlider   = createSlider(settingsFrame,  36, "Walk Speed",   10, WALK_MAX_SPEED,  32, 0, Color3.fromRGB(255,165,0))
+local noclipSlider = createSlider(settingsFrame,  92, "Noclip Speed", 10, NOCLIP_MAX_SPEED, NOCLIP_DEFAULT_SPEED, 0, Color3.fromRGB(255,99,71))
+local dotSlider    = createSlider(settingsFrame, 148, "Lock Dot",     0.70, 0.98, LOCK_DOT_THRESHOLD, 2, Color3.fromRGB(120,200,255))
 local rangeSlider  = createSlider(settingsFrame, 204, "Lock Range",   100, 300, LOCK_RANGE, 0, Color3.fromRGB(120,200,255))
 
--- Aplicación inmediata de sliders (cuando se cierra Ajustes o cuando cambian los toggles)
 local function applySettings(fromWhere)
     local ws   = walkSlider.get()
     local ncs  = noclipSlider.get()
     local dot  = dotSlider.get()
     local rng  = rangeSlider.get()
 
-    -- Walk speed (si Speed ON)
     if speedEnabled then
         local char = localPlayer.Character
         local hum  = char and char:FindFirstChildOfClass("Humanoid")
@@ -983,7 +1011,6 @@ local function applySettings(fromWhere)
         end
     end
 
-    -- Noclip speed
     noclipSpeed = math.clamp(ncs, 10, NOCLIP_MAX_SPEED)
     if noclipEnabled then
         logEvent(("Noclip Speed set → %d (%s)"):format(noclipSpeed, fromWhere or "Ajustes"))
@@ -1014,7 +1041,6 @@ localPlayer.CharacterAdded:Connect(function()
     if antiHitEnabled  then enableAntiHit() end
     if speedEnabled    then maintainSpeed() applySettings("respawn") end
     if floorEnabled    then enableFloor() end
-    -- Lock: mantener visibilidad del botón y posible reanudación
     if lockBtnVisible then quickLockBtn.Visible = true end
     if lockActive then startLock() end
 end)
@@ -1062,7 +1088,6 @@ speedToggleBtn.MouseButton1Click:Connect(function()
         speedTarget = noclipEnabled and "noclip" or nil
     else
         speedEnabled = true; enableSpeed()
-        -- Ajustar al valor del slider al activar
         local ws = walkSlider.get()
         local char = localPlayer.Character
         local hum  = char and char:FindFirstChildOfClass("Humanoid")
@@ -1100,7 +1125,6 @@ noclipToggleBtn.MouseButton1Click:Connect(function()
         noclipToggleBtn.Text = "Noclip ON"
         if flying then flying=false; flyToggleBtn.Text="Fly OFF"; ascend=false; descend=false; stopFly() end
         if speedEnabled then speedEnabled=false; disableSpeed(); speedToggleBtn.Text="Speed OFF" end
-        -- aplicar velocidad desde slider
         noclipSpeed = math.clamp(noclipSlider.get(), 10, NOCLIP_MAX_SPEED)
         startNoclip()
         ascendBtn.Visible    = true
@@ -1153,15 +1177,19 @@ hudToggleBtn.MouseButton1Click:Connect(function()
 end)
 
 --==================================================
--- QUICK LOCK BUTTON (juego)
+-- DRAGGABLE + TAP para ☰ y LOCK (soluciona bug de arrastre/click)
 --==================================================
-quickLockBtn.MouseButton1Click:Connect(function()
-    if not lockActive then
-        startLock()
-    else
-        stopLock()
-    end
-end)
+makeDraggableButton(openBtn, dragFrame, function()
+    -- Tap corto en ☰: abrir/cerrar menú
+    dragFrame.Visible = false
+    menuFrame.Visible = true
+    reclampAll()
+end, 8) -- deadzone mayor para asegurar arrastre suave
+
+makeDraggableButton(quickLockBtn, quickLockBtn, function()
+    -- Tap corto en LOCK: toggle lock
+    if not lockActive then startLock() else stopLock() end
+end, 8)
 
 --==================================================
 -- VELOCIDAD con flechas y ascenso/descenso
@@ -1190,7 +1218,7 @@ speedDownBtn.MouseButton1Click:Connect(function()
         if hum then
             local minSpeed = originalWalkSpeed or hum.WalkSpeed
             currentSpeed   = math.max(hum.WalkSpeed - speedIncrement, 10)
-            currentSpeed   = math.max(currentSpeed, minSpeed) -- no bajar por debajo del original
+            currentSpeed   = math.max(currentSpeed, minSpeed)
             currentSpeed   = math.min(currentSpeed, WALK_MAX_SPEED)
             hum.WalkSpeed  = currentSpeed
             walkSlider.set(currentSpeed)
@@ -1208,14 +1236,11 @@ ascendBtn.MouseButton1Up:Connect(function()   ascend = false end)
 descendBtn.MouseButton1Down:Connect(function() descend = true end)
 descendBtn.MouseButton1Up:Connect(function()   descend = false end)
 
--- Mostrar/ocultar menú principal
-openBtn.MouseButton1Click:Connect(function()
-    dragFrame.Visible = false
-    menuFrame.Visible = true
-end)
+-- Cerrar menú
 closeBtn.MouseButton1Click:Connect(function()
     menuFrame.Visible = false
     dragFrame.Visible = true
+    reclampAll()
 end)
 
-print("✅ Script cargado con mejoras de ergonomía, Ajustes, Lock suave y HUD")
+print("✅ Script cargado (drag fijo para ☰ y LOCK, sin clicks fantasma)")
