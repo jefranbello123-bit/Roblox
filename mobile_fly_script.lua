@@ -1,6 +1,6 @@
--- Script completo: Fly, ESP, Speed, Lock Quick Button, Noclip, Anti-Hit, Knockback, Floor, HUD, Ajustes y Kill Aura
--- ✅ Basado en el escrito que dijiste “FUNCIONA”, manteniendo el sistema de arrastre/menú/clics de la base estable.
--- ⚠️ Sin dependencias externas. Pega este LocalScript en StarterPlayerScripts o StarterGui (móvil).
+-- Script completo: Fly, ESP, Speed, Lock Quick Button (LOCK estable), Noclip, Anti-Hit, Knockback, Floor, HUD, Ajustes, Kill Aura
+-- ➕ Botón extra “TP Self” que ejecuta EXACTAMENTE tu código de Teleport/Private Server al tocarlo.
+-- ⚠️ Sin dependencias externas. Pega este LocalScript en StarterPlayerScripts o StarterGui.
 
 --==================================================
 -- SERVICIOS
@@ -22,16 +22,23 @@ local NOCLIP_MAX_SPEED      = 200
 local FLY_DEFAULT_SPEED     = 50
 local NOCLIP_DEFAULT_SPEED  = 50
 
--- Lock-on (ajustables en “Ajustes” si quieres luego)
+-- Lock-on (ajustables en Ajustes)
 local LOCK_DOT_THRESHOLD    = 0.90 -- 0.70–0.98
 local LOCK_RANGE            = 220  -- 100–300
-local LOCK_SMOOTH_ALPHA     = 0.25 -- 0..1 (lerp)
-local LOCK_LOSS_GRACE       = 0.40 -- s
+local LOCK_LOSS_GRACE       = 0.40 -- s sin buen ángulo antes de soltar
 
--- Kill Aura (valores por defecto seguros)
-local AURA_RANGE_DEFAULT    = 14   -- alcance de activación
-local AURA_HIT_INTERVAL     = 0.25 -- golpes cada 0.25 s aprox. (≈4/s)
-local ALLOW_LOCAL_DAMAGE    = false -- SOLO para tus mapas de prueba: si true, usa :TakeDamage()
+-- Estabilidad extra del Lock
+local LOCK_HYSTERESIS         = 0.08
+local LOCK_MAX_YAW_RATE_DEG   = 220
+local LOCK_MAX_PITCH_RATE_DEG = 160
+local LOCK_MAX_PITCH_ABS_DEG  = 80
+local LOCK_TARGET_LEAD_TIME   = 0.12
+local LOCK_AIM_POS_TAU        = 0.15
+
+-- Kill Aura
+local AURA_RANGE_DEFAULT    = 14
+local AURA_HIT_INTERVAL     = 0.25
+local ALLOW_LOCAL_DAMAGE    = false -- Solo para mapas de prueba propios
 
 --==================================================
 -- GUI PRINCIPAL
@@ -43,7 +50,7 @@ screenGui.IgnoreGuiInset = true
 screenGui.DisplayOrder   = 100
 screenGui.Parent         = playerGui
 
--- Botón circular (☰) para abrir menú (contenedor movible)
+-- Botón circular (☰) para abrir menú (movible)
 local dragFrame = Instance.new("Frame", screenGui)
 dragFrame.Size                   = UDim2.new(0,60,0,60)
 dragFrame.Position               = UDim2.new(0.5,-30,0.5,-30)
@@ -62,9 +69,9 @@ openBtn.BorderSizePixel  = 0
 openBtn.ZIndex           = 101
 Instance.new("UICorner", openBtn).CornerRadius = UDim.new(0.5,0)
 
--- Menú principal (ahora 6 filas x 2 columnas para añadir Kill Aura)
+-- Menú (6 filas x 2 columnas)
 local menuFrame = Instance.new("Frame", screenGui)
-menuFrame.Size              = UDim2.new(0,260,0,360) -- altura +40 para 6ª fila
+menuFrame.Size              = UDim2.new(0,260,0,360)
 menuFrame.Position          = UDim2.new(0.5,-130,0.5,-180)
 menuFrame.BackgroundColor3  = Color3.fromRGB(24,24,30)
 menuFrame.Visible           = false
@@ -95,7 +102,6 @@ closeBtn.BorderSizePixel  = 0
 closeBtn.ZIndex           = 101
 Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0.5,0)
 
--- Helper para botones del menú
 local function createToggleButton(name,text,pos,color)
     local btn = Instance.new("TextButton", menuFrame)
     btn.Name             = name
@@ -111,20 +117,19 @@ local function createToggleButton(name,text,pos,color)
     return btn
 end
 
--- Botones del menú (paleta original)
+-- Botones (paleta original)
 local flyToggleBtn     = createToggleButton("FlyToggle",     "Fly OFF",         UDim2.new(0,10,0,40),  Color3.fromRGB(0,170,255))   -- cyan
-local espToggleBtn     = createToggleButton("ESPToggle",     "ESP OFF",         UDim2.new(0,130,0,40), Color3.fromRGB(255,105,180)) -- rosa fuerte
+local espToggleBtn     = createToggleButton("ESPToggle",     "ESP OFF",         UDim2.new(0,130,0,40), Color3.fromRGB(255,105,180)) -- rosa
 local speedToggleBtn   = createToggleButton("SpeedToggle",   "Speed OFF",       UDim2.new(0,10,0,90),  Color3.fromRGB(255,165,0))   -- naranja
 local lockToggleBtn    = createToggleButton("LockToggle",    "Lock Btn OFF",    UDim2.new(0,130,0,90), Color3.fromRGB(120,200,255)) -- azul claro
 local noclipToggleBtn  = createToggleButton("NoclipToggle",  "Noclip OFF",      UDim2.new(0,10,0,140), Color3.fromRGB(255,99,71))   -- tomate
 local antiHitToggleBtn = createToggleButton("AntiHitToggle", "Anti-Hit OFF",    UDim2.new(0,130,0,140),Color3.fromRGB(100,110,130)) -- gris azulado
 local knockToggleBtn   = createToggleButton("KnockToggle",   "Knockback OFF",   UDim2.new(0,10,0,190), Color3.fromRGB(144,238,144)) -- verde claro
 local floorToggleBtn   = createToggleButton("FloorToggle",   "Floor OFF",       UDim2.new(0,130,0,190),Color3.fromRGB(210,180,140)) -- tan
--- Fila 5: HUD y Kill Aura (nuevo)
 local hudToggleBtn     = createToggleButton("HUDToggle",     "HUD OFF",         UDim2.new(0,10,0,240), Color3.fromRGB(80,120,200))  -- HUD
 local killAuraBtn      = createToggleButton("KillAuraBtn",   "Kill Aura OFF",   UDim2.new(0,130,0,240),Color3.fromRGB(170,80,220))  -- violeta
--- Fila 6: Ajustes baja una fila
 local settingsBtn      = createToggleButton("SettingsBtn",   "Ajustes",         UDim2.new(0,10,0,290), Color3.fromRGB(50,170,160))  -- teal
+local tpSelfBtn        = createToggleButton("TPSelfBtn",     "TP Self",         UDim2.new(0,130,0,290),Color3.fromRGB(50,170,160))  -- teal (nuevo)
 
 -- Botones laterales (móvil)
 local ascendBtn, descendBtn  = Instance.new("TextButton"), Instance.new("TextButton")
@@ -167,6 +172,8 @@ local noclipBodyGyro, noclipBodyVel, noclipConnection, noclipCollisionConn = nil
 
 local targetCharacter, lockConnection = nil, nil
 local lastGoodDotTime = 0
+local lastAimPos = nil
+local lastReacquireTime = 0
 
 local antiDamageConn, platformConn, stateConn, antiKnockConn = nil, nil, nil, nil
 
@@ -326,10 +333,9 @@ quickLockBtn.ZIndex           = 101
 Instance.new("UICorner", quickLockBtn).CornerRadius = UDim.new(0.5,0)
 
 --==================================================
--- UTILIDADES: ARRASTRE (REVERSIÓN A LO ESTABLE)
+-- UTILIDADES: ARRASTRE (simple y estable)
 --==================================================
 local draggingFlag, startPosInput, startPosGui
-
 local function beginDrag(input, gui)
     if input.UserInputType == Enum.UserInputType.MouseButton1
     or input.UserInputType == Enum.UserInputType.Touch then
@@ -337,13 +343,10 @@ local function beginDrag(input, gui)
         startPosInput = input.Position
         startPosGui   = gui.Position
         input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                draggingFlag = false
-            end
+            if input.UserInputState == Enum.UserInputState.End then draggingFlag = false end
         end)
     end
 end
-
 local function updateDrag(input, gui)
     if not draggingFlag then return end
     if input.UserInputType ~= Enum.UserInputType.MouseMovement
@@ -360,13 +363,11 @@ local function updateDrag(input, gui)
     local clampedY = math.clamp(newPos.Y.Offset,0,math.max(0,maxY))
     gui.Position   = UDim2.new(0,clampedX,0,clampedY)
 end
-
 local function makeDraggable(gui)
     gui.InputBegan:Connect(function(input) beginDrag(input, gui) end)
     gui.InputChanged:Connect(function(input) updateDrag(input, gui) end)
 end
 
--- Hacer arrastrables como antes (lo que te funcionaba)
 makeDraggable(dragFrame)
 makeDraggable(openBtn)
 makeDraggable(menuFrame)
@@ -411,8 +412,9 @@ local function stopFly()
 end
 
 --==================================================
--- ESP (rosa fuerte)
+-- ESP
 --==================================================
+local currentHighlights, espConnections, espGlobalConnection = {}, {}, nil
 local function enableESP()
     local function highlightPlayer(plr, character)
         if not character or not plr then return end
@@ -507,8 +509,26 @@ local function disableSpeed()
 end
 
 --==================================================
--- LOCK-ON (rápido) con lerp y gracia de pérdida
+-- LOCK-ON (estable con giro limitado)
 --==================================================
+local function headOrRootPos(model)
+    if not model then return nil end
+    local head = model:FindFirstChild("Head")
+    local hrp  = model:FindFirstChild("HumanoidRootPart")
+    if head and head:IsA("BasePart") then return head.Position end
+    return hrp and hrp.Position or nil
+end
+local function yawPitchFromDir(dir)
+    dir = dir.Unit
+    local yaw   = math.atan2(dir.X, dir.Z)
+    local pitch = math.asin(math.clamp(dir.Y, -1, 1))
+    return yaw, pitch
+end
+local function clampAngleDelta(delta, maxPerStep)
+    if delta >  math.pi then delta = delta - 2*math.pi end
+    if delta < -math.pi then delta = delta + 2*math.pi end
+    return math.clamp(delta, -maxPerStep, maxPerStep)
+end
 local function findTarget()
     local cam = Workspace.CurrentCamera
     if not cam then return nil end
@@ -520,9 +540,10 @@ local function findTarget()
             local char = plr.Character
             local root = char and char:FindFirstChild("HumanoidRootPart")
             if root then
-                local vec  = root.Position - camPos
+                local pos = headOrRootPos(char) or root.Position
+                local vec  = pos - camPos
                 local dist = vec.Magnitude
-                if dist < LOCK_RANGE then
+                if dist < LOCK_RANGE and dist > 1 then
                     local dir  = vec / dist
                     local dot  = dir:Dot(camDir)
                     if dot > bestDot then
@@ -539,42 +560,67 @@ local function startLock()
     if lockConnection then lockConnection:Disconnect() lockConnection = nil end
     local t = select(1, findTarget())
     targetCharacter = t
+    lastAimPos = nil
     if not targetCharacter then
         logEvent("Lock: sin objetivo")
         return
     end
     lockActive = true
     lastGoodDotTime = time()
+    lastReacquireTime = 0
     quickLockBtn.BackgroundColor3 = Color3.fromRGB(160,120,255)
     logEvent("Lock: ON → " .. (targetCharacter.Name or "objetivo"))
+
     lockConnection = RunService.RenderStepped:Connect(function(dt)
-        if not targetCharacter or not targetCharacter.Parent then
-            if lockConnection then lockConnection:Disconnect() lockConnection = nil end
-            lockActive = false
-            quickLockBtn.BackgroundColor3 = Color3.fromRGB(120,200,255)
-            logEvent("Lock: objetivo perdido")
-            return
-        end
         local cam = Workspace.CurrentCamera
-        if cam then
-            local camPos    = cam.CFrame.Position
-            local root      = targetCharacter:FindFirstChild("HumanoidRootPart")
-            if not root then return end
-            local lookAtPos = root.Position
+        if not cam then return end
 
-            local toTarget  = (lookAtPos - camPos)
-            local dist      = toTarget.Magnitude
-            local dir       = (dist > 0) and (toTarget / dist) or cam.CFrame.LookVector
-            local dotNow    = dir:Dot(cam.CFrame.LookVector)
+        local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
+        local targetHum  = targetCharacter and targetCharacter:FindFirstChildOfClass("Humanoid")
+        if not targetCharacter or not targetCharacter.Parent or not targetRoot or (targetHum and targetHum.Health <= 0) then
+            if (time() - lastGoodDotTime) > LOCK_LOSS_GRACE then
+                if lockConnection then lockConnection:Disconnect() lockConnection = nil end
+                lockActive = false
+                quickLockBtn.BackgroundColor3 = Color3.fromRGB(120,200,255)
+                logEvent("Lock: objetivo perdido")
+                return
+            end
+        end
 
-            if dist <= LOCK_RANGE and dotNow >= LOCK_DOT_THRESHOLD then
-                lastGoodDotTime = time()
-            elseif (time() - lastGoodDotTime) > LOCK_LOSS_GRACE then
+        local camPos   = cam.CFrame.Position
+        local trPos    = headOrRootPos(targetCharacter) or targetRoot.Position
+
+        local vel = targetRoot and targetRoot.AssemblyLinearVelocity or Vector3.zero
+        local lead = math.clamp(LOCK_TARGET_LEAD_TIME, 0, 0.25)
+        local desiredAim = trPos + vel * lead
+
+        if lastAimPos == nil then
+            lastAimPos = desiredAim
+        else
+            local alphaPos = 1 - math.exp(-dt / LOCK_AIM_POS_TAU)
+            lastAimPos = lastAimPos:Lerp(desiredAim, math.clamp(alphaPos,0,1))
+        end
+
+        local toAim     = lastAimPos - camPos
+        local dist      = toAim.Magnitude
+        if dist < 1e-3 then return end
+        local aimDir    = toAim / dist
+
+        local currentDot = aimDir:Dot(cam.CFrame.LookVector)
+        if currentDot >= LOCK_DOT_THRESHOLD then
+            lastGoodDotTime = time()
+        elseif currentDot < (LOCK_DOT_THRESHOLD - LOCK_HYSTERESIS) and (time() - lastGoodDotTime) > LOCK_LOSS_GRACE then
+            if (time() - lastReacquireTime) > 0.12 then
+                lastReacquireTime = time()
                 local newT = select(1, findTarget())
                 if newT then
                     targetCharacter = newT
-                    lastGoodDotTime = time()
                     logEvent("Lock: objetivo cambiado → " .. (targetCharacter.Name or "?"))
+                    local root2 = newT:FindFirstChild("HumanoidRootPart")
+                    local pos2  = headOrRootPos(newT) or (root2 and root2.Position) or lastAimPos
+                    local vel2  = root2 and root2.AssemblyLinearVelocity or Vector3.zero
+                    lastAimPos  = pos2 + vel2 * lead
+                    lastGoodDotTime = time()
                 else
                     if lockConnection then lockConnection:Disconnect() lockConnection = nil end
                     lockActive = false
@@ -583,11 +629,23 @@ local function startLock()
                     return
                 end
             end
-
-            local targetCF = CFrame.lookAt(camPos, lookAtPos)
-            local alpha = 1 - (1-LOCK_SMOOTH_ALPHA)^(math.max(dt,0.016) * 60)
-            cam.CFrame = cam.CFrame:Lerp(targetCF, alpha)
         end
+
+        local targetYaw, targetPitch = yawPitchFromDir(aimDir)
+        local cf = cam.CFrame
+        local _, currentPitch, _ = cf:ToEulerAnglesXYZ()
+        local _, currentYaw,   _ = cf:ToEulerAnglesYXZ()
+
+        local maxYawStep   = math.rad(LOCK_MAX_YAW_RATE_DEG)   * dt
+        local maxPitchStep = math.rad(LOCK_MAX_PITCH_RATE_DEG) * dt
+
+        local dyaw   = clampAngleDelta(targetYaw - currentYaw, maxYawStep)
+        local dpitch = clampAngleDelta(targetPitch - currentPitch, maxPitchStep)
+
+        local newYaw   = currentYaw + dyaw
+        local newPitch = math.clamp(currentPitch + dpitch, math.rad(-LOCK_MAX_PITCH_ABS_DEG), math.rad(LOCK_MAX_PITCH_ABS_DEG))
+
+        cam.CFrame  = CFrame.new(camPos) * CFrame.fromEulerAnglesYXZ(newPitch, newYaw, 0)
     end)
 end
 local function stopLock()
@@ -652,13 +710,12 @@ local function stopNoclip()
 end
 
 --==================================================
--- ANTI-HIT (respeta saltos y ↑/↓)
+-- ANTI-HIT
 --==================================================
 local function enableAntiHit()
     local char = localPlayer.Character
     local hum  = char and char:FindFirstChildOfClass("Humanoid")
     if not hum then return end
-
     if not antiDamageConn then
         antiDamageConn = hum.HealthChanged:Connect(function()
             if antiHitEnabled and hum then hum.Health = hum.MaxHealth end
@@ -714,7 +771,7 @@ local function disableAntiHit()
 end
 
 --==================================================
--- KNOCKBACK (empujar a otros)
+-- KNOCKBACK
 --==================================================
 local function enableKnockback()
     local char = localPlayer.Character
@@ -755,7 +812,7 @@ local function disableKnockback()
 end
 
 --==================================================
--- FLOOR (placas bajo el jugador, 2s)
+-- FLOOR
 --==================================================
 local function spawnFloorPlate()
     local char = localPlayer.Character
@@ -770,24 +827,16 @@ local function spawnFloorPlate()
         Debris:AddItem(plate, 2)
     end
 end
-local function enableFloor()
-    floorConnection = RunService.Heartbeat:Connect(spawnFloorPlate)
-end
-local function disableFloor()
-    if floorConnection then floorConnection:Disconnect() floorConnection = nil end
-end
+local function enableFloor()  floorConnection = RunService.Heartbeat:Connect(spawnFloorPlate) end
+local function disableFloor() if floorConnection then floorConnection:Disconnect() floorConnection = nil end end
 
 --==================================================
--- KILL AURA (nuevo)
---   - Busca al enemigo más cercano en un radio (killRange).
---   - Gira el HRP hacia el objetivo, intenta usar Tool:Activate().
---   - Opcional (solo pruebas propias): daño local con Humanoid:TakeDamage().
+-- KILL AURA
 --==================================================
 local function getNearestEnemy(maxDist)
     local myChar = localPlayer.Character
     local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
     if not (myChar and myRoot) then return nil end
-
     local nearest, bestD = nil, maxDist or AURA_RANGE_DEFAULT
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= localPlayer then
@@ -796,41 +845,28 @@ local function getNearestEnemy(maxDist)
             local r   = ch and ch:FindFirstChild("HumanoidRootPart")
             if ch and hum and r and hum.Health > 0 then
                 local d = (r.Position - myRoot.Position).Magnitude
-                if d < bestD then
-                    bestD = d
-                    nearest = ch
-                end
+                if d < bestD then bestD = d; nearest = ch end
             end
         end
     end
     return nearest, bestD
 end
-
 local function tryEquipAnyTool()
     local char = localPlayer.Character
     if not char then return nil end
     local hum = char:FindFirstChildOfClass("Humanoid")
     if not hum then return nil end
-
-    -- Si ya hay tool equipada, úsala
     local backpack = localPlayer:FindFirstChildOfClass("Backpack")
     for _, child in ipairs(char:GetChildren()) do
-        if child:IsA("Tool") then
-            return child
-        end
+        if child:IsA("Tool") then return child end
     end
-    -- Si no, intenta equipar la primera del backpack
     if backpack then
         for _, tool in ipairs(backpack:GetChildren()) do
-            if tool:IsA("Tool") then
-                hum:EquipTool(tool)
-                return tool
-            end
+            if tool:IsA("Tool") then hum:EquipTool(tool); return tool end
         end
     end
     return nil
 end
-
 local function faceTowards(targetChar)
     local char = localPlayer.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
@@ -839,22 +875,14 @@ local function faceTowards(targetChar)
     local lookPos = Vector3.new(tRoot.Position.X, root.Position.Y, tRoot.Position.Z)
     root.CFrame   = CFrame.lookAt(root.Position, lookPos)
 end
-
 local function performHit(targetChar)
-    -- Modo por defecto: activar Tool si existe (universal y no invasivo)
     local tool = tryEquipAnyTool()
-    if tool then
-        tool:Activate()
-    end
-    -- Modo pruebas (solo mapas propios): daño local (puede no replicar en juegos ajenos)
+    if tool then tool:Activate() end
     if ALLOW_LOCAL_DAMAGE then
         local hum = targetChar:FindFirstChildOfClass("Humanoid")
-        if hum and hum.Health > 0 then
-            hum:TakeDamage(7) -- daño pequeño y rápido
-        end
+        if hum and hum.Health > 0 then hum:TakeDamage(7) end
     end
 end
-
 local function startKillAura()
     if killAuraConnection then killAuraConnection:Disconnect() killAuraConnection = nil end
     killAuraConnection = RunService.Heartbeat:Connect(function()
@@ -874,7 +902,7 @@ local function stopKillAura()
 end
 
 --==================================================
--- PANEL DE AJUSTES (Opcional: sliders ya existentes; Kill Aura usa valores por defecto)
+-- PANEL DE AJUSTES (sliders)
 --==================================================
 local settingsFrame = Instance.new("Frame", screenGui)
 settingsFrame.Name                   = "SettingsPanel"
@@ -1009,7 +1037,6 @@ local function createSlider(parent, y, labelText, minVal, maxVal, defaultVal, de
     }
 end
 
--- Sliders existentes
 local walkSlider   = createSlider(settingsFrame,  36, "Walk Speed",   10, WALK_MAX_SPEED,  32, 0, Color3.fromRGB(255,165,0))
 local noclipSlider = createSlider(settingsFrame,  92, "Noclip Speed", 10, NOCLIP_MAX_SPEED, NOCLIP_DEFAULT_SPEED, 0, Color3.fromRGB(255,99,71))
 local dotSlider    = createSlider(settingsFrame, 148, "Lock Dot",     0.70, 0.98, LOCK_DOT_THRESHOLD, 2, Color3.fromRGB(120,200,255))
@@ -1127,9 +1154,7 @@ lockToggleBtn.MouseButton1Click:Connect(function()
     lockBtnVisible = not lockBtnVisible
     quickLockBtn.Visible = lockBtnVisible
     lockToggleBtn.Text = lockBtnVisible and "Lock Btn ON" or "Lock Btn OFF"
-    if not lockBtnVisible and lockActive then
-        stopLock()
-    end
+    if not lockBtnVisible and lockActive then stopLock() end
     logEvent("Lock Button: " .. (lockBtnVisible and "VISIBLE" or "OCULTO"))
 end)
 
@@ -1211,6 +1236,192 @@ killAuraBtn.MouseButton1Click:Connect(function()
 end)
 
 --==================================================
+-- NUEVO: BOTÓN "TP Self" — ejecuta TU CÓDIGO EXACTO al tocar
+--==================================================
+tpSelfBtn.MouseButton1Click:Connect(function()
+    --[[ ------------- TU BLOQUE EXACTO (parte 1) -------------
+--TELEPORT TO URSELF SCRIPT
+local accesscode = "" -- paste your access code
+local placeid = game.PlaceId
+
+game.RobloxReplicatedStorage.ContactListIrisInviteTeleport:FireServer(placeid, "", accesscode)
+    
+]]
+    -- ------------- TU BLOQUE EXACTO (parte 2) -------------
+    --PRIVATE SERVER CREATOR
+    local md5 = {}
+    local hmac = {}
+    local base64 = {}
+
+    do
+        do
+            local T = {
+                0xd76aa478, 0xe8c7b756, 0x242070db, 0xc1bdceee, 0xf57c0faf, 0x4787c62a, 0xa8304613, 0xfd469501,
+                0x698098d8, 0x8b44f7af, 0xffff5bb1, 0x895cd7be, 0x6b901122, 0xfd987193, 0xa679438e, 0x49b40821,
+                0xf61e2562, 0xc040b340, 0x265e5a51, 0xe9b6c7aa, 0xd62f105d, 0x02441453, 0xd8a1e681, 0xe7d3fbc8,
+                0x21e1cde6, 0xc33707d6, 0xf4d50d87, 0x455a14ed, 0xa9e3e905, 0xfcefa3f8, 0x676f02d9, 0x8d2a4c8a,
+                0xfffa3942, 0x8771f681, 0x6d9d6122, 0xfde5380c, 0xa4beea44, 0x4bdecfa9, 0xf6bb4b60, 0xbebfbc70,
+                0x289b7ec6, 0xeaa127fa, 0xd4ef3085, 0x04881d05, 0xd9d4d039, 0xe6db99e5, 0x1fa27cf8, 0xc4ac5665,
+                0xf4292244, 0x432aff97, 0xab9423a7, 0xfc93a039, 0x655b59c3, 0x8f0ccc92, 0xffeff47d, 0x85845dd1,
+                0x6fa87e4f, 0xfe2ce6e0, 0xa3014314, 0x4e0811a1, 0xf7537e82, 0xbd3af235, 0x2ad7d2bb, 0xeb86d391,
+            }
+
+            local function add(a, b)
+                local lsw = bit32.band(a, 0xFFFF) + bit32.band(b, 0xFFFF)
+                local msw = bit32.rshift(a, 16) + bit32.rshift(b, 16) + bit32.rshift(lsw, 16)
+                return bit32.bor(bit32.lshift(msw, 16), bit32.band(lsw, 0xFFFF))
+            end
+
+            local function rol(x, n)
+                return bit32.bor(bit32.lshift(x, n), bit32.rshift(x, 32 - n))
+            end
+
+            local function F(x, y, z) return bit32.bor(bit32.band(x, y), bit32.band(bit32.bnot(x), z)) end
+            local function G(x, y, z) return bit32.bor(bit32.band(x, z), bit32.band(y, bit32.bnot(z))) end
+            local function H(x, y, z) return bit32.bxor(x, bit32.bxor(y, z)) end
+            local function I(x, y, z) return bit32.bxor(y, bit32.bor(x, bit32.bnot(z))) end
+
+            function md5.sum(message)
+                local a, b, c, d = 0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476
+
+                local message_len = #message
+                local padded_message = message .. "\128"
+                while #padded_message % 64 ~= 56 do
+                    padded_message = padded_message .. "\0"
+                end
+
+                local len_bytes = ""
+                local len_bits = message_len * 8
+                for i = 0, 7 do
+                    len_bytes = len_bytes .. string.char(bit32.band(bit32.rshift(len_bits, i * 8), 0xFF))
+                end
+                padded_message = padded_message .. len_bytes
+
+                for i = 1, #padded_message, 64 do
+                    local chunk = padded_message:sub(i, i + 63)
+                    local X = {}
+                    for j = 0, 15 do
+                        local b1, b2, b3, b4 = chunk:byte(j * 4 + 1, j * 4 + 4)
+                        X[j] = bit32.bor(b1, bit32.lshift(b2, 8), bit32.lshift(b3, 16), bit32.lshift(b4, 24))
+                    end
+
+                    local aa, bb, cc, dd = a, b, c, d
+                    local s = { 7,12,17,22, 5,9,14,20, 4,11,16,23, 6,10,15,21 }
+
+                    for j = 0, 63 do
+                        local f, k, shift_index
+                        if j < 16 then
+                            f = F(b, c, d); k = j;                shift_index = j % 4
+                        elseif j < 32 then
+                            f = G(b, c, d); k = (1 + 5 * j) % 16; shift_index = 4 + (j % 4)
+                        elseif j < 48 then
+                            f = H(b, c, d); k = (5 + 3 * j) % 16; shift_index = 8 + (j % 4)
+                        else
+                            f = I(b, c, d); k = (7 * j) % 16;     shift_index = 12 + (j % 4)
+                        end
+
+                        local temp = add(a, f)
+                        temp = add(temp, X[k])
+                        temp = add(temp, T[j + 1])
+                        temp = rol(temp, s[shift_index + 1])
+
+                        local new_b = add(b, temp)
+                        a, b, c, d = d, new_b, b, c
+                    end
+
+                    a = add(a, aa); b = add(b, bb); c = add(c, cc); d = add(d, dd)
+                end
+
+                local function to_le_hex(n)
+                    local s = ""
+                    for i = 0, 3 do
+                        s = s .. string.char(bit32.band(bit32.rshift(n, i * 8), 0xFF))
+                    end
+                    return s
+                end
+
+                return to_le_hex(a) .. to_le_hex(b) .. to_le_hex(c) .. to_le_hex(d)
+            end
+        end
+
+        do
+            function hmac.new(key, msg, hash_func)
+                if #key > 64 then
+                    key = hash_func(key)
+                end
+
+                local o_key_pad, i_key_pad = "", ""
+                for i = 1, 64 do
+                    local byte = (i <= #key and string.byte(key, i)) or 0
+                    o_key_pad = o_key_pad .. string.char(bit32.bxor(byte, 0x5C))
+                    i_key_pad = i_key_pad .. string.char(bit32.bxor(byte, 0x36))
+                end
+
+                return hash_func(o_key_pad .. hash_func(i_key_pad .. msg))
+            end
+        end
+
+        do
+            local b64chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+            function base64.encode(data)
+                return (
+                    (data:gsub(".", function(x)
+                        local r, b_val = "", x:byte()
+                        for i = 8, 1, -1 do
+                            r = r .. (b_val % 2 ^ i - b_val % 2 ^ (i - 1) > 0 and "1" or "0")
+                        end
+                        return r
+                    end) .. "0000"):gsub("%d%d%d?%d?%d?%d?", function(x)
+                        if #x < 6 then return "" end
+                        local c = 0
+                        for i = 1, 6 do
+                            c = c + (x:sub(i, i) == "1" and 2 ^ (6 - i) or 0)
+                        end
+                        return b64chars:sub(c + 1, c + 1)
+                    end) .. ({ "", "==", "=" })[#data % 3 + 1]
+                )
+            end
+        end
+    end
+
+    local function GenerateReservedServerCode(placeId)
+        local uuid = {}
+        for i = 1, 16 do
+            uuid[i] = math.random(0, 255)
+        end
+        uuid[7] = bit32.bor(bit32.band(uuid[7], 0x0F), 0x40) -- v4
+        uuid[9] = bit32.bor(bit32.band(uuid[9], 0x3F), 0x80) -- RFC 4122
+
+        local firstBytes = ""
+        for i = 1, 16 do
+            firstBytes = firstBytes .. string.char(uuid[i])
+        end
+
+        local placeIdBytes = ""
+        local pIdRec = placeId
+        for _ = 1, 8 do
+            placeIdBytes = placeIdBytes .. string.char(pIdRec % 256)
+            pIdRec = math.floor(pIdRec / 256)
+        end
+
+        local content = firstBytes .. placeIdBytes
+        local SUPERDUPERSECRETROBLOXKEYTHATTHEYDIDNTCHANGEEVERSINCEFOREVER = "e4Yn8ckbCJtw2sv7qmbg"
+        local signature = hmac.new(SUPERDUPERSECRETROBLOXKEYTHATTHEYDIDNTCHANGEEVERSINCEFOREVER, content, md5.sum)
+        local accessCodeBytes = signature .. content
+        local accessCode = base64.encode(accessCodeBytes):gsub("+","-"):gsub("/","_")
+
+        local pdding = 0
+        accessCode = (accessCode:gsub("=", function() pdding = pdding + 1; return "" end)) .. tostring(pdding)
+        local gameCode = "" -- no se usa en tu bloque final para el FireServer (mantengo tal cual estructura)
+        return accessCode, gameCode
+    end
+
+    local accessCode, _ = GenerateReservedServerCode(game.PlaceId)
+    game.RobloxReplicatedStorage.ContactListIrisInviteTeleport:FireServer(game.PlaceId, "", accessCode)
+    -- add setclipboard(accessCode) here (tal cual tu comentario; no se agrega más lógica)
+end)
+
+--==================================================
 -- CLICS DIRECTOS (como en el script estable)
 --==================================================
 openBtn.MouseButton1Click:Connect(function()
@@ -1268,4 +1479,4 @@ ascendBtn.MouseButton1Up:Connect(function()   ascend = false end)
 descendBtn.MouseButton1Down:Connect(function() descend = true end)
 descendBtn.MouseButton1Up:Connect(function()   descend = false end)
 
-print("✅ Script cargado (base estable + Kill Aura)")
+print("✅ Script cargado (LOCK estable + Kill Aura + TP Self integrado)")
