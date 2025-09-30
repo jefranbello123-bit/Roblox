@@ -1,5 +1,5 @@
--- Script completo: Fly, ESP, Speed, Lock Quick Button (LOCK estable), Noclip, Anti-Hit, Knockback, Floor, HUD, Ajustes, Kill Aura
--- ➕ Botón extra “TP Self” que ejecuta EXACTAMENTE tu código de Teleport/Private Server al tocarlo.
+-- Script completo: Fly, ESP, Speed, Lock Quick Button (LOCK estable), Noclip, Anti-Hit, Knockback, Floor, HUD, Ajustes, Kill Aura y TP Self
+-- 📱 Ajuste visual para pantallas tipo iPhone 14: botones un poco más pequeños, menú un poco más ancho, laterales mejor separados.
 -- ⚠️ Sin dependencias externas. Pega este LocalScript en StarterPlayerScripts o StarterGui.
 
 --==================================================
@@ -50,10 +50,10 @@ screenGui.IgnoreGuiInset = true
 screenGui.DisplayOrder   = 100
 screenGui.Parent         = playerGui
 
--- Botón circular (☰) para abrir menú (movible)
+-- Botón circular (☰) para abrir menú (movible) — más compacto
 local dragFrame = Instance.new("Frame", screenGui)
-dragFrame.Size                   = UDim2.new(0,60,0,60)
-dragFrame.Position               = UDim2.new(0.5,-30,0.5,-30)
+dragFrame.Size                   = UDim2.new(0,54,0,54)
+dragFrame.Position               = UDim2.new(0.5,-27,0.5,-27)
 dragFrame.BackgroundTransparency = 1
 dragFrame.Active                 = true
 dragFrame.ZIndex                 = 100
@@ -63,16 +63,16 @@ openBtn.Size             = UDim2.new(1,0,1,0)
 openBtn.BackgroundColor3 = Color3.fromRGB(50,170,160)   -- TEAL
 openBtn.TextColor3       = Color3.new(1,1,1)
 openBtn.Font             = Enum.Font.GothamBold
-openBtn.TextSize         = 28
+openBtn.TextSize         = 26
 openBtn.Text             = "☰"
 openBtn.BorderSizePixel  = 0
 openBtn.ZIndex           = 101
 Instance.new("UICorner", openBtn).CornerRadius = UDim.new(0.5,0)
 
--- Menú (6 filas x 2 columnas)
+-- Menú (6 filas x 2 columnas) — un poco más ancho
 local menuFrame = Instance.new("Frame", screenGui)
-menuFrame.Size              = UDim2.new(0,260,0,360)
-menuFrame.Position          = UDim2.new(0.5,-130,0.5,-180)
+menuFrame.Size              = UDim2.new(0,300,0,360)
+menuFrame.Position          = UDim2.new(0.5,-150,0.5,-180)
 menuFrame.BackgroundColor3  = Color3.fromRGB(24,24,30)
 menuFrame.Visible           = false
 menuFrame.Active            = true
@@ -102,10 +102,11 @@ closeBtn.BorderSizePixel  = 0
 closeBtn.ZIndex           = 101
 Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0.5,0)
 
+-- Helper para botones del menú (ligeramente más pequeños)
 local function createToggleButton(name,text,pos,color)
     local btn = Instance.new("TextButton", menuFrame)
     btn.Name             = name
-    btn.Size             = UDim2.new(0,120,0,40)
+    btn.Size             = UDim2.new(0,136,0,36) -- antes 120x40
     btn.Position         = pos
     btn.BackgroundColor3 = color
     btn.TextColor3       = Color3.new(1,1,1)
@@ -117,42 +118,49 @@ local function createToggleButton(name,text,pos,color)
     return btn
 end
 
--- Botones (paleta original)
-local flyToggleBtn     = createToggleButton("FlyToggle",     "Fly OFF",         UDim2.new(0,10,0,40),  Color3.fromRGB(0,170,255))   -- cyan
-local espToggleBtn     = createToggleButton("ESPToggle",     "ESP OFF",         UDim2.new(0,130,0,40), Color3.fromRGB(255,105,180)) -- rosa
-local speedToggleBtn   = createToggleButton("SpeedToggle",   "Speed OFF",       UDim2.new(0,10,0,90),  Color3.fromRGB(255,165,0))   -- naranja
-local lockToggleBtn    = createToggleButton("LockToggle",    "Lock Btn OFF",    UDim2.new(0,130,0,90), Color3.fromRGB(120,200,255)) -- azul claro
-local noclipToggleBtn  = createToggleButton("NoclipToggle",  "Noclip OFF",      UDim2.new(0,10,0,140), Color3.fromRGB(255,99,71))   -- tomate
-local antiHitToggleBtn = createToggleButton("AntiHitToggle", "Anti-Hit OFF",    UDim2.new(0,130,0,140),Color3.fromRGB(100,110,130)) -- gris azulado
-local knockToggleBtn   = createToggleButton("KnockToggle",   "Knockback OFF",   UDim2.new(0,10,0,190), Color3.fromRGB(144,238,144)) -- verde claro
-local floorToggleBtn   = createToggleButton("FloorToggle",   "Floor OFF",       UDim2.new(0,130,0,190),Color3.fromRGB(210,180,140)) -- tan
-local hudToggleBtn     = createToggleButton("HUDToggle",     "HUD OFF",         UDim2.new(0,10,0,240), Color3.fromRGB(80,120,200))  -- HUD
-local killAuraBtn      = createToggleButton("KillAuraBtn",   "Kill Aura OFF",   UDim2.new(0,130,0,240),Color3.fromRGB(170,80,220))  -- violeta
-local settingsBtn      = createToggleButton("SettingsBtn",   "Ajustes",         UDim2.new(0,10,0,290), Color3.fromRGB(50,170,160))  -- teal
-local tpSelfBtn        = createToggleButton("TPSelfBtn",     "TP Self",         UDim2.new(0,130,0,290),Color3.fromRGB(50,170,160))  -- teal (nuevo)
+-- Columnas y filas para el nuevo ancho
+local COL_L = 10
+local COL_R = 154 -- 10 + 136 + 8
+local ROW_Y = {40, 84, 128, 172, 216, 260}
 
--- Botones laterales (móvil)
+-- Botones (paleta original)
+local flyToggleBtn     = createToggleButton("FlyToggle",     "Fly OFF",         UDim2.new(0,COL_L, 0,ROW_Y[1]),  Color3.fromRGB(0,170,255))   -- cyan
+local espToggleBtn     = createToggleButton("ESPToggle",     "ESP OFF",         UDim2.new(0,COL_R, 0,ROW_Y[1]),  Color3.fromRGB(255,105,180)) -- rosa
+local speedToggleBtn   = createToggleButton("SpeedToggle",   "Speed OFF",       UDim2.new(0,COL_L, 0,ROW_Y[2]),  Color3.fromRGB(255,165,0))   -- naranja
+local lockToggleBtn    = createToggleButton("LockToggle",    "Lock Btn OFF",    UDim2.new(0,COL_R, 0,ROW_Y[2]),  Color3.fromRGB(120,200,255)) -- azul claro
+local noclipToggleBtn  = createToggleButton("NoclipToggle",  "Noclip OFF",      UDim2.new(0,COL_L, 0,ROW_Y[3]),  Color3.fromRGB(255,99,71))   -- tomate
+local antiHitToggleBtn = createToggleButton("AntiHitToggle", "Anti-Hit OFF",    UDim2.new(0,COL_R, 0,ROW_Y[3]),  Color3.fromRGB(100,110,130)) -- gris azulado
+local knockToggleBtn   = createToggleButton("KnockToggle",   "Knockback OFF",   UDim2.new(0,COL_L, 0,ROW_Y[4]),  Color3.fromRGB(144,238,144)) -- verde claro
+local floorToggleBtn   = createToggleButton("FloorToggle",   "Floor OFF",       UDim2.new(0,COL_R, 0,ROW_Y[4]),  Color3.fromRGB(210,180,140)) -- tan
+local hudToggleBtn     = createToggleButton("HUDToggle",     "HUD OFF",         UDim2.new(0,COL_L, 0,ROW_Y[5]),  Color3.fromRGB(80,120,200))  -- HUD
+local killAuraBtn      = createToggleButton("KillAuraBtn",   "Kill Aura OFF",   UDim2.new(0,COL_R, 0,ROW_Y[5]),  Color3.fromRGB(170,80,220))  -- violeta
+local settingsBtn      = createToggleButton("SettingsBtn",   "Ajustes",         UDim2.new(0,COL_L, 0,ROW_Y[6]),  Color3.fromRGB(50,170,160))  -- teal
+local tpSelfBtn        = createToggleButton("TPSelfBtn",     "TP Self",         UDim2.new(0,COL_R, 0,ROW_Y[6]),  Color3.fromRGB(50,170,160))  -- teal
+
+-- Botones laterales (móvil) — más compactos y mejor separados
 local ascendBtn, descendBtn  = Instance.new("TextButton"), Instance.new("TextButton")
 local speedUpBtn, speedDownBtn = Instance.new("TextButton"), Instance.new("TextButton")
 ascendBtn.Parent, descendBtn.Parent, speedUpBtn.Parent, speedDownBtn.Parent = screenGui, screenGui, screenGui, screenGui
 
 local function styleSide(btn, pos, color, txt)
-    btn.Size             = UDim2.new(0,56,0,56)
+    btn.Size             = UDim2.new(0,52,0,52) -- antes 56
     btn.Position         = pos
     btn.BackgroundColor3 = color
     btn.TextColor3       = Color3.new(1,1,1)
     btn.Font             = Enum.Font.GothamBold
-    btn.TextSize         = 22
+    btn.TextSize         = 21
     btn.Text             = txt
     btn.BorderSizePixel  = 0
     btn.Visible          = false
     btn.ZIndex           = 101
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0.4,0)
 end
-styleSide(ascendBtn,    UDim2.new(0.86,0,0.45,0), Color3.fromRGB(0,170,255), "↑")
-styleSide(descendBtn,   UDim2.new(0.86,0,0.61,0), Color3.fromRGB(0,120,200), "↓")
-styleSide(speedUpBtn,   UDim2.new(0.72,0,0.45,0), Color3.fromRGB(50,205,50), "↑")
-styleSide(speedDownBtn, UDim2.new(0.72,0,0.61,0), Color3.fromRGB(46,139,87), "↓")
+-- Ascenso/Descenso a la derecha, mitad alta y baja
+styleSide(ascendBtn,    UDim2.new(0.88,0,0.46,0), Color3.fromRGB(0,170,255), "↑")
+styleSide(descendBtn,   UDim2.new(0.88,0,0.62,0), Color3.fromRGB(0,120,200), "↓")
+-- Speed +/- más hacia el centro
+styleSide(speedUpBtn,   UDim2.new(0.74,0,0.46,0), Color3.fromRGB(50,205,50), "↑")
+styleSide(speedDownBtn, UDim2.new(0.74,0,0.62,0), Color3.fromRGB(46,139,87), "↓")
 
 --==================================================
 -- ESTADO
@@ -189,11 +197,11 @@ local killRange = AURA_RANGE_DEFAULT
 local lastHitTime = 0
 
 --==================================================
--- HUD DE REGISTRO (movible)
+-- HUD DE REGISTRO (movible) — un pelín más compacto
 --==================================================
 local hudFrame = Instance.new("Frame", screenGui)
 hudFrame.Name                   = "LogHUD"
-hudFrame.Size                   = UDim2.new(0,260,0,150)
+hudFrame.Size                   = UDim2.new(0,250,0,140) -- antes 260x150
 hudFrame.Position               = UDim2.new(0.025,0,0.12,0)
 hudFrame.BackgroundColor3       = Color3.fromRGB(12,12,16)
 hudFrame.BackgroundTransparency = 0.15
@@ -317,11 +325,11 @@ hudClear.MouseButton1Click:Connect(function()
 end)
 
 --==================================================
--- BOTÓN RÁPIDO DE LOCK (movible)
+-- BOTÓN RÁPIDO DE LOCK (movible) — un poco más pequeño y mejor ubicado
 --==================================================
 local quickLockBtn = Instance.new("TextButton", screenGui)
-quickLockBtn.Size             = UDim2.new(0,70,0,70)
-quickLockBtn.Position         = UDim2.new(0.7,0,0.6,0)
+quickLockBtn.Size             = UDim2.new(0,62,0,62) -- antes 70
+quickLockBtn.Position         = UDim2.new(0.77,0,0.58,0) -- movido un poco al centro
 quickLockBtn.BackgroundColor3 = Color3.fromRGB(120,200,255) -- inactivo
 quickLockBtn.TextColor3       = Color3.new(1,1,1)
 quickLockBtn.Font             = Enum.Font.GothamBold
@@ -414,7 +422,6 @@ end
 --==================================================
 -- ESP
 --==================================================
-local currentHighlights, espConnections, espGlobalConnection = {}, {}, nil
 local function enableESP()
     local function highlightPlayer(plr, character)
         if not character or not plr then return end
@@ -1236,7 +1243,7 @@ killAuraBtn.MouseButton1Click:Connect(function()
 end)
 
 --==================================================
--- NUEVO: BOTÓN "TP Self" — ejecuta TU CÓDIGO EXACTO al tocar
+-- BOTÓN "TP Self" — ejecuta TU CÓDIGO EXACTO al tocar
 --==================================================
 tpSelfBtn.MouseButton1Click:Connect(function()
     --[[ ------------- TU BLOQUE EXACTO (parte 1) -------------
@@ -1412,13 +1419,13 @@ game.RobloxReplicatedStorage.ContactListIrisInviteTeleport:FireServer(placeid, "
 
         local pdding = 0
         accessCode = (accessCode:gsub("=", function() pdding = pdding + 1; return "" end)) .. tostring(pdding)
-        local gameCode = "" -- no se usa en tu bloque final para el FireServer (mantengo tal cual estructura)
+        local gameCode = "" -- no se usa en tu bloque final
         return accessCode, gameCode
     end
 
     local accessCode, _ = GenerateReservedServerCode(game.PlaceId)
     game.RobloxReplicatedStorage.ContactListIrisInviteTeleport:FireServer(game.PlaceId, "", accessCode)
-    -- add setclipboard(accessCode) here (tal cual tu comentario; no se agrega más lógica)
+    -- add setclipboard(accessCode) here
 end)
 
 --==================================================
@@ -1444,14 +1451,12 @@ speedUpBtn.MouseButton1Click:Connect(function()
         local char = localPlayer.Character
         local hum  = char and char:FindFirstChildOfClass("Humanoid")
         if hum then
-            currentSpeed = math.min(hum.WalkSpeed + speedIncrement, WALK_MAX_SPEED)
+            currentSpeed = math.min(hum.WalkSpeed + SPEED_INC_DEFAULT, WALK_MAX_SPEED)
             hum.WalkSpeed = currentSpeed
-            walkSlider.set(currentSpeed)
             logEvent(("Speed + → %d"):format(currentSpeed))
         end
     elseif speedTarget == "noclip" and noclipEnabled then
-        noclipSpeed  = math.min(noclipSpeed + speedIncrement, NOCLIP_MAX_SPEED)
-        noclipSlider.set(noclipSpeed)
+        noclipSpeed  = math.min(noclipSpeed + SPEED_INC_DEFAULT, NOCLIP_MAX_SPEED)
         logEvent(("Noclip Speed + → %d"):format(noclipSpeed))
     end
 end)
@@ -1461,16 +1466,14 @@ speedDownBtn.MouseButton1Click:Connect(function()
         local hum  = char and char:FindFirstChildOfClass("Humanoid")
         if hum then
             local minSpeed = originalWalkSpeed or hum.WalkSpeed
-            currentSpeed   = math.max(hum.WalkSpeed - speedIncrement, 10)
+            currentSpeed   = math.max(hum.WalkSpeed - SPEED_INC_DEFAULT, 10)
             currentSpeed   = math.max(currentSpeed, minSpeed)
             currentSpeed   = math.min(currentSpeed, WALK_MAX_SPEED)
             hum.WalkSpeed  = currentSpeed
-            walkSlider.set(currentSpeed)
             logEvent(("Speed - → %d"):format(currentSpeed))
         end
     elseif speedTarget == "noclip" and noclipEnabled then
-        noclipSpeed  = math.max(noclipSpeed - speedIncrement, 10)
-        noclipSlider.set(noclipSpeed)
+        noclipSpeed  = math.max(noclipSpeed - SPEED_INC_DEFAULT, 10)
         logEvent(("Noclip Speed - → %d"):format(noclipSpeed))
     end
 end)
@@ -1479,4 +1482,4 @@ ascendBtn.MouseButton1Up:Connect(function()   ascend = false end)
 descendBtn.MouseButton1Down:Connect(function() descend = true end)
 descendBtn.MouseButton1Up:Connect(function()   descend = false end)
 
-print("✅ Script cargado (LOCK estable + Kill Aura + TP Self integrado)")
+print("✅ Script cargado (UI optimizada para iPhone 14-like, LOCK estable, Kill Aura y TP Self)")
