@@ -1,7 +1,6 @@
--- Script completo: Fly, ESP, Speed, Lock Quick Button, Noclip, Anti-Hit, Knockback, Floor, HUD y Ajustes
--- ✅ Reversión a lo que FUNCIONABA: arrastre simple (beginDrag/updateDrag/makeDraggable) y clics directos.
---    Sin handlers raros de Input: el botón ☰ abre menú y el botón LOCK alterna correctamente.
---    Mantengo mejoras de Lock suave, HUD y panel de Ajustes, pero con el sistema de arrastre del script estable.
+-- Script completo: Fly, ESP, Speed, Lock Quick Button, Noclip, Anti-Hit, Knockback, Floor, HUD, Ajustes y Kill Aura
+-- ✅ Basado en el escrito que dijiste “FUNCIONA”, manteniendo el sistema de arrastre/menú/clics de la base estable.
+-- ⚠️ Sin dependencias externas. Pega este LocalScript en StarterPlayerScripts o StarterGui (móvil).
 
 --==================================================
 -- SERVICIOS
@@ -23,11 +22,16 @@ local NOCLIP_MAX_SPEED      = 200
 local FLY_DEFAULT_SPEED     = 50
 local NOCLIP_DEFAULT_SPEED  = 50
 
--- Lock-on (ajustables también en "Ajustes")
+-- Lock-on (ajustables en “Ajustes” si quieres luego)
 local LOCK_DOT_THRESHOLD    = 0.90 -- 0.70–0.98
 local LOCK_RANGE            = 220  -- 100–300
 local LOCK_SMOOTH_ALPHA     = 0.25 -- 0..1 (lerp)
-local LOCK_LOSS_GRACE       = 0.40 -- segundos
+local LOCK_LOSS_GRACE       = 0.40 -- s
+
+-- Kill Aura (valores por defecto seguros)
+local AURA_RANGE_DEFAULT    = 14   -- alcance de activación
+local AURA_HIT_INTERVAL     = 0.25 -- golpes cada 0.25 s aprox. (≈4/s)
+local ALLOW_LOCAL_DAMAGE    = false -- SOLO para tus mapas de prueba: si true, usa :TakeDamage()
 
 --==================================================
 -- GUI PRINCIPAL
@@ -58,10 +62,10 @@ openBtn.BorderSizePixel  = 0
 openBtn.ZIndex           = 101
 Instance.new("UICorner", openBtn).CornerRadius = UDim.new(0.5,0)
 
--- Menú principal (5 filas x 2 columnas)
+-- Menú principal (ahora 6 filas x 2 columnas para añadir Kill Aura)
 local menuFrame = Instance.new("Frame", screenGui)
-menuFrame.Size              = UDim2.new(0,260,0,320)
-menuFrame.Position          = UDim2.new(0.5,-130,0.5,-160)
+menuFrame.Size              = UDim2.new(0,260,0,360) -- altura +40 para 6ª fila
+menuFrame.Position          = UDim2.new(0.5,-130,0.5,-180)
 menuFrame.BackgroundColor3  = Color3.fromRGB(24,24,30)
 menuFrame.Visible           = false
 menuFrame.Active            = true
@@ -116,8 +120,11 @@ local noclipToggleBtn  = createToggleButton("NoclipToggle",  "Noclip OFF",      
 local antiHitToggleBtn = createToggleButton("AntiHitToggle", "Anti-Hit OFF",    UDim2.new(0,130,0,140),Color3.fromRGB(100,110,130)) -- gris azulado
 local knockToggleBtn   = createToggleButton("KnockToggle",   "Knockback OFF",   UDim2.new(0,10,0,190), Color3.fromRGB(144,238,144)) -- verde claro
 local floorToggleBtn   = createToggleButton("FloorToggle",   "Floor OFF",       UDim2.new(0,130,0,190),Color3.fromRGB(210,180,140)) -- tan
+-- Fila 5: HUD y Kill Aura (nuevo)
 local hudToggleBtn     = createToggleButton("HUDToggle",     "HUD OFF",         UDim2.new(0,10,0,240), Color3.fromRGB(80,120,200))  -- HUD
-local settingsBtn      = createToggleButton("SettingsBtn",   "Ajustes",         UDim2.new(0,130,0,240),Color3.fromRGB(50,170,160))  -- teal
+local killAuraBtn      = createToggleButton("KillAuraBtn",   "Kill Aura OFF",   UDim2.new(0,130,0,240),Color3.fromRGB(170,80,220))  -- violeta
+-- Fila 6: Ajustes baja una fila
+local settingsBtn      = createToggleButton("SettingsBtn",   "Ajustes",         UDim2.new(0,10,0,290), Color3.fromRGB(50,170,160))  -- teal
 
 -- Botones laterales (móvil)
 local ascendBtn, descendBtn  = Instance.new("TextButton"), Instance.new("TextButton")
@@ -167,6 +174,12 @@ local knockbackConnections = {}
 local knockbackPower, upwardPower = 100, 50
 
 local floorConnection
+
+-- Kill Aura
+local killAuraEnabled = false
+local killAuraConnection = nil
+local killRange = AURA_RANGE_DEFAULT
+local lastHitTime = 0
 
 --==================================================
 -- HUD DE REGISTRO (movible)
@@ -353,7 +366,7 @@ local function makeDraggable(gui)
     gui.InputChanged:Connect(function(input) updateDrag(input, gui) end)
 end
 
--- Hacer arrastrables como antes (lo que funcionaba)
+-- Hacer arrastrables como antes (lo que te funcionaba)
 makeDraggable(dragFrame)
 makeDraggable(openBtn)
 makeDraggable(menuFrame)
@@ -753,7 +766,7 @@ local function spawnFloorPlate()
         plate.Anchored  = true
         plate.Color     = Color3.fromRGB(255,200,0)
         plate.Position  = root.Position - Vector3.new(0,3.5,0)
-        plate.Parent    = workspace
+        plate.Parent    = Workspace
         Debris:AddItem(plate, 2)
     end
 end
@@ -765,7 +778,103 @@ local function disableFloor()
 end
 
 --==================================================
--- PANEL DE AJUSTES (sliders) — movible
+-- KILL AURA (nuevo)
+--   - Busca al enemigo más cercano en un radio (killRange).
+--   - Gira el HRP hacia el objetivo, intenta usar Tool:Activate().
+--   - Opcional (solo pruebas propias): daño local con Humanoid:TakeDamage().
+--==================================================
+local function getNearestEnemy(maxDist)
+    local myChar = localPlayer.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    if not (myChar and myRoot) then return nil end
+
+    local nearest, bestD = nil, maxDist or AURA_RANGE_DEFAULT
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= localPlayer then
+            local ch  = plr.Character
+            local hum = ch and ch:FindFirstChildOfClass("Humanoid")
+            local r   = ch and ch:FindFirstChild("HumanoidRootPart")
+            if ch and hum and r and hum.Health > 0 then
+                local d = (r.Position - myRoot.Position).Magnitude
+                if d < bestD then
+                    bestD = d
+                    nearest = ch
+                end
+            end
+        end
+    end
+    return nearest, bestD
+end
+
+local function tryEquipAnyTool()
+    local char = localPlayer.Character
+    if not char then return nil end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return nil end
+
+    -- Si ya hay tool equipada, úsala
+    local backpack = localPlayer:FindFirstChildOfClass("Backpack")
+    for _, child in ipairs(char:GetChildren()) do
+        if child:IsA("Tool") then
+            return child
+        end
+    end
+    -- Si no, intenta equipar la primera del backpack
+    if backpack then
+        for _, tool in ipairs(backpack:GetChildren()) do
+            if tool:IsA("Tool") then
+                hum:EquipTool(tool)
+                return tool
+            end
+        end
+    end
+    return nil
+end
+
+local function faceTowards(targetChar)
+    local char = localPlayer.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    local tRoot= targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+    if not (root and tRoot) then return end
+    local lookPos = Vector3.new(tRoot.Position.X, root.Position.Y, tRoot.Position.Z)
+    root.CFrame   = CFrame.lookAt(root.Position, lookPos)
+end
+
+local function performHit(targetChar)
+    -- Modo por defecto: activar Tool si existe (universal y no invasivo)
+    local tool = tryEquipAnyTool()
+    if tool then
+        tool:Activate()
+    end
+    -- Modo pruebas (solo mapas propios): daño local (puede no replicar en juegos ajenos)
+    if ALLOW_LOCAL_DAMAGE then
+        local hum = targetChar:FindFirstChildOfClass("Humanoid")
+        if hum and hum.Health > 0 then
+            hum:TakeDamage(7) -- daño pequeño y rápido
+        end
+    end
+end
+
+local function startKillAura()
+    if killAuraConnection then killAuraConnection:Disconnect() killAuraConnection = nil end
+    killAuraConnection = RunService.Heartbeat:Connect(function()
+        if not killAuraEnabled then return end
+        local now = os.clock()
+        if now - lastHitTime < AURA_HIT_INTERVAL then return end
+        local target, dist = getNearestEnemy(killRange)
+        if target and dist <= killRange then
+            faceTowards(target)
+            performHit(target)
+            lastHitTime = now
+        end
+    end)
+end
+local function stopKillAura()
+    if killAuraConnection then killAuraConnection:Disconnect() killAuraConnection = nil end
+end
+
+--==================================================
+-- PANEL DE AJUSTES (Opcional: sliders ya existentes; Kill Aura usa valores por defecto)
 --==================================================
 local settingsFrame = Instance.new("Frame", screenGui)
 settingsFrame.Name                   = "SettingsPanel"
@@ -900,7 +1009,7 @@ local function createSlider(parent, y, labelText, minVal, maxVal, defaultVal, de
     }
 end
 
--- Sliders (se aplican al cerrar "Ajustes" o al activar toggles):
+-- Sliders existentes
 local walkSlider   = createSlider(settingsFrame,  36, "Walk Speed",   10, WALK_MAX_SPEED,  32, 0, Color3.fromRGB(255,165,0))
 local noclipSlider = createSlider(settingsFrame,  92, "Noclip Speed", 10, NOCLIP_MAX_SPEED, NOCLIP_DEFAULT_SPEED, 0, Color3.fromRGB(255,99,71))
 local dotSlider    = createSlider(settingsFrame, 148, "Lock Dot",     0.70, 0.98, LOCK_DOT_THRESHOLD, 2, Color3.fromRGB(120,200,255))
@@ -954,6 +1063,7 @@ localPlayer.CharacterAdded:Connect(function()
     if floorEnabled    then enableFloor() end
     if lockBtnVisible then quickLockBtn.Visible = true end
     if lockActive then startLock() end
+    if killAuraEnabled then startKillAura() end
 end)
 
 --==================================================
@@ -1087,6 +1197,19 @@ hudToggleBtn.MouseButton1Click:Connect(function()
     if hudEnabled then logEvent("HUD visible") end
 end)
 
+-- Kill Aura toggle
+killAuraBtn.MouseButton1Click:Connect(function()
+    killAuraEnabled = not killAuraEnabled
+    killAuraBtn.Text = killAuraEnabled and "Kill Aura ON" or "Kill Aura OFF"
+    if killAuraEnabled then
+        startKillAura()
+        logEvent(("Kill Aura: ON (r=%.0f, %.2fs)"):format(killRange, AURA_HIT_INTERVAL))
+    else
+        stopKillAura()
+        logEvent("Kill Aura: OFF")
+    end
+end)
+
 --==================================================
 -- CLICS DIRECTOS (como en el script estable)
 --==================================================
@@ -1145,4 +1268,4 @@ ascendBtn.MouseButton1Up:Connect(function()   ascend = false end)
 descendBtn.MouseButton1Down:Connect(function() descend = true end)
 descendBtn.MouseButton1Up:Connect(function()   descend = false end)
 
-print("✅ Script cargado (reversión de arrastre a lo estable + mejoras intactas)")
+print("✅ Script cargado (base estable + Kill Aura)")
