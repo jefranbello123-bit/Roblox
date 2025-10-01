@@ -1,0 +1,98 @@
+-- AutoClick Toggle de prueba (SOLO Studio) - LocalScript
+-- ✅ Debe ejecutarse al dar Play (F5). En Run no corre.
+-- ⚠️ Desactivado fuera de Roblox Studio (no usar en servidores públicos).
+
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+
+print("[AutoClick] LocalScript cargado") -- Diagnóstico
+
+if not RunService:IsStudio() then
+    warn("[AutoClick] Desactivado fuera de Roblox Studio.")
+    return
+end
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- ===================== CONFIG =====================
+local CPS = 20                 -- Clicks por segundo
+local SAFETY_MAX_SECONDS = 0   -- 0 = sin límite. Pon 30 para cortar a los 30s.
+-- ==================================================
+
+-- Evento local para enganchar tu lógica (UI/contadores locales, sin remotes)
+local LocalClick = Instance.new("BindableEvent")
+LocalClick.Name = "LocalClick"
+LocalClick.Parent = script
+
+-- ===== UI =====
+local gui = Instance.new("ScreenGui")
+gui.Name = "AutoClickTester"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.Parent = playerGui
+
+local btn = Instance.new("TextButton")
+btn.Name = "ToggleBtn"
+btn.Size = UDim2.fromOffset(220, 52)
+btn.AnchorPoint = Vector2.new(1, 1)
+btn.Position = UDim2.new(1, -16, 1, -16)
+btn.Text = "Activar AutoClick"
+btn.AutoButtonColor = true
+btn.Parent = gui
+
+local info = Instance.new("TextLabel")
+info.Name = "Info"
+info.Size = UDim2.fromOffset(220, 32)
+info.AnchorPoint = Vector2.new(1, 1)
+info.Position = UDim2.new(1, -16, 1, -74)
+info.BackgroundTransparency = 0.3
+info.Text = ("Estado: OFF | CPS: %d | Clicks: 0"):format(CPS)
+info.Parent = gui
+
+pcall(function()
+    Instance.new("UICorner").Parent = btn
+    Instance.new("UICorner").Parent = info
+end)
+
+-- ===== Lógica =====
+local running = false
+local total = 0
+
+local function doClick()
+    total += 1
+    LocalClick:Fire() -- tu lógica local aquí (no remotes)
+    info.Text = ("Estado: %s | CPS: %d | Clicks: %d")
+        :format(running and "ON" or "OFF", CPS, total)
+end
+
+local function loopAutoClick()
+    print("[AutoClick] iniciado")
+    local startT = os.clock()
+    while running do
+        doClick()
+        task.wait(1 / math.max(1, CPS))
+        if SAFETY_MAX_SECONDS > 0 and (os.clock() - startT) >= SAFETY_MAX_SECONDS then
+            running = false
+        end
+    end
+    print("[AutoClick] detenido")
+end
+
+btn.MouseButton1Click:Connect(function()
+    if running then
+        running = false
+        btn.Text = "Activar AutoClick"
+        info.Text = ("Estado: OFF | CPS: %d | Clicks: %d"):format(CPS, total)
+    else
+        running = true
+        btn.Text = "Desactivar AutoClick"
+        info.Text = ("Estado: ON | CPS: %d | Clicks: %d"):format(CPS, total)
+        task.spawn(loopAutoClick)
+    end
+end)
+
+-- Ejemplo de uso (conecta tu lógica local si quieres):
+-- LocalClick.Event:Connect(function()
+--     -- actualizar UI local, sumar contador local, etc.
+-- end)
