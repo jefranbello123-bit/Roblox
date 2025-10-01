@@ -1,98 +1,73 @@
--- AutoClick Toggle de prueba (SOLO Studio) - LocalScript
--- ✅ Debe ejecutarse al dar Play (F5). En Run no corre.
--- ⚠️ Desactivado fuera de Roblox Studio (no usar en servidores públicos).
+--[[
+=================================================================
+--  Autoclicker con Botón Móvil para Roblox (Móvil)
+--
+--  Instrucciones:
+--  1. Coloca este script dentro de 'StarterPlayerScripts'.
+--  2. Al entrar al juego, aparecerá un botón en la pantalla.
+--  3. Arrastra el botón para moverlo donde quieras.
+--  4. Toca el botón para activar/desactivar el autoclicker.
+--
+=================================================================
+]]
 
-local RunService = game:GetService("RunService")
+-- Servicios
+local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
 
-print("[AutoClick] LocalScript cargado") -- Diagnóstico
+-- Variables de configuración
+local delay = 0.1 -- Tiempo en segundos entre cada clic
+local autoclickerEnabled = false -- Estado del autoclicker
 
-if not RunService:IsStudio() then
-    warn("[AutoClick] Desactivado fuera de Roblox Studio.")
-    return
-end
-
+-- Jugador local y mouse
 local player = Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
+local mouse = player:GetMouse()
 
--- ===================== CONFIG =====================
-local CPS = 20                 -- Clicks por segundo
-local SAFETY_MAX_SECONDS = 0   -- 0 = sin límite. Pon 30 para cortar a los 30s.
--- ==================================================
+-- Crear la GUI del botón
+local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+screenGui.ResetOnSpawn = false
 
--- Evento local para enganchar tu lógica (UI/contadores locales, sin remotes)
-local LocalClick = Instance.new("BindableEvent")
-LocalClick.Name = "LocalClick"
-LocalClick.Parent = script
+local dragButton = Instance.new("TextButton", screenGui)
+dragButton.Size = UDim2.new(0, 80, 0, 80) -- Tamaño del botón (80x80 píxeles)
+dragButton.Position = UDim2.new(0.5, -40, 0.5, -40) -- Posición inicial (centro de la pantalla)
+dragButton.Text = "Click"
+dragButton.Font = Enum.Font.SourceSansBold
+dragButton.TextSize = 24
+dragButton.BackgroundColor3 = Color3.fromRGB(85, 170, 255) -- Color azul
+dragButton.BorderColor3 = Color3.fromRGB(255, 255, 255)
+dragButton.BorderSizePixel = 2
+dragButton.Draggable = true -- Permite que el botón se pueda arrastrar
+dragButton.Active = true -- Permite que detecte clics mientras se arrastra
 
--- ===== UI =====
-local gui = Instance.new("ScreenGui")
-gui.Name = "AutoClickTester"
-gui.ResetOnSpawn = false
-gui.IgnoreGuiInset = true
-gui.Parent = playerGui
-
-local btn = Instance.new("TextButton")
-btn.Name = "ToggleBtn"
-btn.Size = UDim2.fromOffset(220, 52)
-btn.AnchorPoint = Vector2.new(1, 1)
-btn.Position = UDim2.new(1, -16, 1, -16)
-btn.Text = "Activar AutoClick"
-btn.AutoButtonColor = true
-btn.Parent = gui
-
-local info = Instance.new("TextLabel")
-info.Name = "Info"
-info.Size = UDim2.fromOffset(220, 32)
-info.AnchorPoint = Vector2.new(1, 1)
-info.Position = UDim2.new(1, -16, 1, -74)
-info.BackgroundTransparency = 0.3
-info.Text = ("Estado: OFF | CPS: %d | Clicks: 0"):format(CPS)
-info.Parent = gui
-
-pcall(function()
-    Instance.new("UICorner").Parent = btn
-    Instance.new("UICorner").Parent = info
-end)
-
--- ===== Lógica =====
-local running = false
-local total = 0
-
-local function doClick()
-    total += 1
-    LocalClick:Fire() -- tu lógica local aquí (no remotes)
-    info.Text = ("Estado: %s | CPS: %d | Clicks: %d")
-        :format(running and "ON" or "OFF", CPS, total)
+-- Función para simular un clic
+local function performClick()
+	-- Simula un toque en la posición actual del cursor
+	game:GetService("VirtualInputManager"):SendMouseButtonEvent(mouse.X, mouse.Y, 0, true, game, 1)
+	wait(0.05)
+	game:GetService("VirtualInputManager"):SendMouseButtonEvent(mouse.X, mouse.Y, 0, false, game, 1)
 end
 
-local function loopAutoClick()
-    print("[AutoClick] iniciado")
-    local startT = os.clock()
-    while running do
-        doClick()
-        task.wait(1 / math.max(1, CPS))
-        if SAFETY_MAX_SECONDS > 0 and (os.clock() - startT) >= SAFETY_MAX_SECONDS then
-            running = false
-        end
-    end
-    print("[AutoClick] detenido")
-end
-
-btn.MouseButton1Click:Connect(function()
-    if running then
-        running = false
-        btn.Text = "Activar AutoClick"
-        info.Text = ("Estado: OFF | CPS: %d | Clicks: %d"):format(CPS, total)
-    else
-        running = true
-        btn.Text = "Desactivar AutoClick"
-        info.Text = ("Estado: ON | CPS: %d | Clicks: %d"):format(CPS, total)
-        task.spawn(loopAutoClick)
-    end
+-- Bucle principal del autoclicker
+spawn(function()
+	while true do
+		wait(delay)
+		if autoclickerEnabled then
+			performClick()
+		end
+	end
 end)
 
--- Ejemplo de uso (conecta tu lógica local si quieres):
--- LocalClick.Event:Connect(function()
---     -- actualizar UI local, sumar contador local, etc.
--- end)
+-- Activar/desactivar con un toque
+dragButton.MouseButton1Click:Connect(function()
+	autoclickerEnabled = not autoclickerEnabled
+	
+	if autoclickerEnabled then
+		print("Autoclicker Móvil: Activado")
+		dragButton.BackgroundColor3 = Color3.fromRGB(85, 255, 127) -- Cambia a color verde
+		dragButton.Text = "ON"
+	else
+		print("Autoclicker Móvil: Desactivado")
+		dragButton.BackgroundColor3 = Color3.fromRGB(255, 85, 85) -- Cambia a color rojo
+		dragButton.Text = "OFF"
+	end
+end)
