@@ -1,6 +1,6 @@
 -- LocalScript COMPLETO (pegar tal cual en StarterPlayerScripts o StarterGui)
--- Funciones: Fly, ESP, Speed, Lock (Aim Assist al más cercano), Noclip, Anti-Hit mejorado, Knockback, Floor, HUD, Ajustes, TP-Server
--- UI simplificada estilo “web”: pocos colores, grises suaves + acento teal. Arrastre estable. Todo dentro del viewport.
+-- Funciones: Fly, ESP, Speed, Lock (Aim Assist), Noclip, Anti-Hit MEJORADO, Knockback, Floor, HUD, Ajustes, TP-Server
+-- UI: Menú con borde arcoíris animado + estilo simple móvil. Arrastre estable y dentro del viewport.
 
 --==================================================
 -- SERVICIOS
@@ -15,30 +15,32 @@ local playerGui   = localPlayer:WaitForChild("PlayerGui")
 --==================================================
 -- PARÁMETROS
 --==================================================
--- Speed
+-- Speed (más alto por solicitud)
 local SPEED_INC_DEFAULT     = 6
 local WALK_MAX_SPEED        = 500
 local NOCLIP_MAX_SPEED      = 300
 local FLY_DEFAULT_SPEED     = 60
 local NOCLIP_DEFAULT_SPEED  = 60
 
--- Lock / Aim Assist
-local LOCK_RANGE            = 230   -- rango de búsqueda
-local LOCK_FOV_DEG          = 120   -- FOV de captura (cono frente a cámara)
-local LOCK_SMOOTH_ALPHA     = 0.10  -- lerp por frame (más bajo = más suave)
-local LOCK_MAX_DEG_PER_SEC  = 220   -- límite de giro por segundo
-local LOCK_STICKY           = true  -- si true: siempre se pega al más cercano dentro de FOV
+-- Lock / Aim Assist (más estable)
+local LOCK_RANGE            = 230
+local LOCK_FOV_DEG          = 120
+local LOCK_SMOOTH_ALPHA     = 0.10
+local LOCK_MAX_DEG_PER_SEC  = 220
+local LOCK_STICKY           = true
 
--- Anti-Hit (estabilidad)
-local AH_MAX_FALL_SPEED     = -140  -- límite caída rápida (baja más rápido pero controlado)
-local AH_UPWARD_CAP_GROUND  = 10    -- tope hacia arriba si estás en suelo
-local AH_UPWARD_CAP_AIR     = 8     -- tope hacia arriba en aire si NO saltas
-local AH_JUMP_UP_CAP        = 55    -- tope hacia arriba cuando saltas
-local AH_MAX_ACCEL_PER_SEC  = 260   -- límite de cambio de velocidad por segundo (suaviza)
-local AH_PURGE_BODYMOVERS   = true  -- elimina Body* extraños ajenos al script (cliente)
+-- Anti-Hit (respeta salto/combos aéreos y evita “quedarse flotando”)
+local AH_MAX_FALL_SPEED     = -140  -- límite de caída
+local AH_UPWARD_CAP_GROUND  = 18    -- tope hacia arriba si estás en suelo
+local AH_UPWARD_CAP_AIR     = 16    -- tope hacia arriba en aire cuando NO saltas
+local AH_JUMP_UP_CAP        = 60    -- tope hacia arriba durante salto (para aéreos)
+local AH_MAX_ACCEL_PER_SEC  = 260   -- límite de cambio horizontal por segundo
+local AH_PURGE_BODYMOVERS   = true  -- eliminar BodyMovers ajenos (cliente)
+local JUMP_GRACE            = 0.50  -- ventana de gracia tras saltar
+local AIR_ANIM_GRACE        = 0.70  -- ventana de gracia para animaciones en aire
 
 --==================================================
--- GUI (estilo web simple)
+-- GUI (paleta y helpers)
 --==================================================
 local function corner(o, r) local c=Instance.new("UICorner",o); c.CornerRadius=UDim.new(0,r or 8); return c end
 
@@ -46,53 +48,128 @@ local screenGui = Instance.new("ScreenGui")
 screenGui.Name, screenGui.ResetOnSpawn, screenGui.IgnoreGuiInset, screenGui.DisplayOrder = "FlySpeedESPLockGui", false, true, 100
 screenGui.Parent = playerGui
 
--- Paleta simple
-local COL_BG  = Color3.fromRGB(26,28,33)   -- fondo panel
-local COL_BTN = Color3.fromRGB(40,44,52)   -- botón base gris
+local COL_BG  = Color3.fromRGB(26,28,33)
+local COL_BTN = Color3.fromRGB(40,44,52)
 local COL_TXT = Color3.fromRGB(230,235,240)
-local COL_ACC = Color3.fromRGB(38,166,154) -- teal acento
+local COL_ACC = Color3.fromRGB(38,166,154)
 local COL_RED = Color3.fromRGB(235,70,70)
 
--- Botón flotante (☰) minimal
+-- Botón flotante (☰) — arrastrable
 local dragFrame = Instance.new("Frame", screenGui)
-dragFrame.Size, dragFrame.Position, dragFrame.BackgroundTransparency, dragFrame.Active, dragFrame.ZIndex =
-    UDim2.new(0,56,0,56), UDim2.new(0.08,0,0.75,0), 1, true, 100
+dragFrame.Size = UDim2.new(0,56,0,56)
+dragFrame.Position = UDim2.new(0.08,0,0.75,0)
+dragFrame.BackgroundTransparency = 1
+dragFrame.Active = true
+dragFrame.ZIndex = 100
 
 local openBtn = Instance.new("TextButton", dragFrame)
-openBtn.Size, openBtn.BackgroundColor3, openBtn.TextColor3, openBtn.Font, openBtn.TextSize, openBtn.Text, openBtn.BorderSizePixel, openBtn.ZIndex =
-    UDim2.new(1,0,1,0), COL_ACC, Color3.new(1,1,1), Enum.Font.GothamBold, 26, "☰", 0, 101
+openBtn.Size = UDim2.new(1,0,1,0)
+openBtn.BackgroundColor3 = COL_ACC
+openBtn.TextColor3 = Color3.new(1,1,1)
+openBtn.Font = Enum.Font.GothamBold
+openBtn.TextSize = 26
+openBtn.Text = "☰"
+openBtn.BorderSizePixel = 0
+openBtn.ZIndex = 101
 corner(openBtn, 12)
 
--- Menú principal (ligeramente más alto para incluir TP-Server)
-local menuFrame = Instance.new("Frame", screenGui)
-menuFrame.Size, menuFrame.Position, menuFrame.BackgroundColor3, menuFrame.Visible, menuFrame.Active, menuFrame.ZIndex =
-    UDim2.new(0,300,0,360), UDim2.new(0.5,-150,0.5,-180), COL_BG, false, true, 100
+--==================================================
+-- MENÚ con BORDE ARCOÍRIS (tu diseño)
+--==================================================
+-- Contenedor externo con borde rainbow
+local rainbowBorder = Instance.new("Frame", screenGui)
+rainbowBorder.Size = UDim2.new(0, 308, 0, 368) -- un poco más grande que el menú
+rainbowBorder.Position = UDim2.new(0.5, -154, 0.5, -184)
+rainbowBorder.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+rainbowBorder.BorderSizePixel = 0
+rainbowBorder.ZIndex = 99
+rainbowBorder.Visible = false         -- << oculto al inicio (abrimos con ☰)
+rainbowBorder.Active  = true
+local rbCorner = Instance.new("UICorner", rainbowBorder); rbCorner.CornerRadius = UDim.new(0,12)
+
+-- Efecto arcoíris animado
+local rainbowGradient = Instance.new("UIGradient", rainbowBorder)
+rainbowGradient.Rotation = 0
+rainbowGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0.00, Color3.fromRGB(255, 0, 0)),
+    ColorSequenceKeypoint.new(0.16, Color3.fromRGB(255, 128, 0)),
+    ColorSequenceKeypoint.new(0.33, Color3.fromRGB(255, 255, 0)),
+    ColorSequenceKeypoint.new(0.50, Color3.fromRGB(0, 255, 0)),
+    ColorSequenceKeypoint.new(0.66, Color3.fromRGB(0, 255, 255)),
+    ColorSequenceKeypoint.new(0.83, Color3.fromRGB(0, 0, 255)),
+    ColorSequenceKeypoint.new(1.00, Color3.fromRGB(255, 0, 255)),
+})
+task.spawn(function()
+    while true do
+        for i = 0, 360, 1 do
+            rainbowGradient.Rotation = i
+            task.wait(0.02)
+        end
+    end
+end)
+
+-- Menú interno (ligero blur/semitransparente)
+local menuFrame = Instance.new("Frame", rainbowBorder)
+menuFrame.Size = UDim2.new(0, 300, 0, 360)
+menuFrame.Position = UDim2.new(0, 4, 0, 4)
+menuFrame.BackgroundColor3 = COL_BG
+menuFrame.BackgroundTransparency = 0.3
+menuFrame.BorderSizePixel = 0
+menuFrame.Active = true
+menuFrame.Visible = false -- se muestra junto con rainbowBorder
+menuFrame.ZIndex = 100
 corner(menuFrame, 10)
 
+-- Barra de título
 local titleBar = Instance.new("Frame", menuFrame)
-titleBar.BackgroundColor3, titleBar.Size, titleBar.Position, titleBar.BorderSizePixel, titleBar.ZIndex =
-    Color3.fromRGB(30,32,38), UDim2.new(1,0,0,42), UDim2.new(0,0,0,0), 0, 101
+titleBar.BackgroundColor3 = Color3.fromRGB(30,32,38)
+titleBar.Size = UDim2.new(1,0,0,42)
+titleBar.Position = UDim2.new(0,0,0,0)
+titleBar.BorderSizePixel = 0
+titleBar.ZIndex = 101
 corner(titleBar, 10)
 
 local titleLabel = Instance.new("TextLabel", titleBar)
-titleLabel.BackgroundTransparency, titleLabel.Text, titleLabel.TextColor3, titleLabel.Font, titleLabel.TextSize, titleLabel.TextXAlignment,
-titleLabel.Size, titleLabel.Position, titleLabel.ZIndex =
-    1, "Menú", COL_TXT, Enum.Font.GothamBold, 20, Enum.TextXAlignment.Left, UDim2.new(1,-60,1,0), UDim2.new(0,16,0,0), 101
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "Menú"
+titleLabel.TextColor3 = COL_TXT
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextSize = 20
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Size = UDim2.new(1,-60,1,0)
+titleLabel.Position = UDim2.new(0,16,0,0)
+titleLabel.ZIndex = 101
 
 local closeBtn = Instance.new("TextButton", titleBar)
-closeBtn.Size, closeBtn.Position, closeBtn.BackgroundColor3, closeBtn.TextColor3, closeBtn.Font, closeBtn.TextSize, closeBtn.Text, closeBtn.BorderSizePixel, closeBtn.ZIndex =
-    UDim2.new(0,28,0,28), UDim2.new(1,-36,0,7), COL_RED, Color3.new(1,1,1), Enum.Font.GothamBold, 18, "×", 0, 101
+closeBtn.Size = UDim2.new(0,28,0,28)
+closeBtn.Position = UDim2.new(1,-36,0,7)
+closeBtn.BackgroundColor3 = COL_RED
+closeBtn.TextColor3 = Color3.new(1,1,1)
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextSize = 18
+closeBtn.Text = "×"
+closeBtn.BorderSizePixel = 0
+closeBtn.ZIndex = 101
 corner(closeBtn, 8)
 
--- Helper botón simple
+-- Helper botón
 local function makeButton(parent, name, text, pos)
     local b = Instance.new("TextButton", parent)
-    b.Name, b.Size, b.Position, b.BackgroundColor3, b.TextColor3, b.Font, b.TextSize, b.Text, b.BorderSizePixel, b.ZIndex =
-        name, UDim2.new(0,140,0,40), pos, COL_BTN, Color3.new(1,1,1), Enum.Font.GothamSemibold, 18, text, 0, 101
-    corner(b, 8); return b
+    b.Name = name
+    b.Size = UDim2.new(0,140,0,40) -- compactos (cabida en iPhone 14)
+    b.Position = pos
+    b.BackgroundColor3 = COL_BTN
+    b.TextColor3 = Color3.new(1,1,1)
+    b.Font = Enum.Font.GothamSemibold
+    b.TextSize = 18
+    b.Text = text
+    b.BorderSizePixel = 0
+    b.ZIndex = 101
+    corner(b, 8)
+    return b
 end
 
--- Grid 5x2 + fila extra TP (6x2)
+-- Grid compacto 5x2
 local gridY0, rowH, colX1, colX2 = 54, 46, 10, 150
 local flyToggleBtn     = makeButton(menuFrame,"FlyToggle",     "Fly OFF",         UDim2.new(0,colX1,0,gridY0+0*rowH))
 local espToggleBtn     = makeButton(menuFrame,"ESPToggle",     "ESP OFF",         UDim2.new(0,colX2,0,gridY0+0*rowH))
@@ -105,19 +182,27 @@ local floorToggleBtn   = makeButton(menuFrame,"FloorToggle",   "Floor OFF",     
 local hudToggleBtn     = makeButton(menuFrame,"HUDToggle",     "HUD OFF",         UDim2.new(0,colX1,0,gridY0+4*rowH))
 local settingsBtn      = makeButton(menuFrame,"SettingsBtn",   "Ajustes",         UDim2.new(0,colX2,0,gridY0+4*rowH))
 
--- Fila extra: TP-Server (2 columnas)
+-- TP-Server (tu código exacto) — botón full fila
 local tpBtn = Instance.new("TextButton", menuFrame)
-tpBtn.Size, tpBtn.Position, tpBtn.BackgroundColor3, tpBtn.TextColor3, tpBtn.Font, tpBtn.TextSize, tpBtn.Text, tpBtn.BorderSizePixel, tpBtn.ZIndex =
-    UDim2.new(0,280,0,40), UDim2.new(0,10,0,gridY0+5*rowH), COL_ACC, Color3.new(1,1,1), Enum.Font.GothamBold, 18, "TP a tu servidor (Privado)", 0, 101
+tpBtn.Size = UDim2.new(0,280,0,40)
+tpBtn.Position = UDim2.new(0,10,0,gridY0+5*rowH)
+tpBtn.BackgroundColor3 = COL_ACC
+tpBtn.TextColor3 = Color3.new(1,1,1)
+tpBtn.Font = Enum.Font.GothamBold
+tpBtn.TextSize = 18
+tpBtn.Text = "TP a tu servidor (Privado)"
+tpBtn.BorderSizePixel = 0
+tpBtn.ZIndex = 101
 corner(tpBtn, 8)
 
--- Botones laterales móviles (ascenso/descenso & speed +/-)
+-- Botones laterales (móvil)
 local ascendBtn, descendBtn, speedUpBtn, speedDownBtn = Instance.new("TextButton"), Instance.new("TextButton"), Instance.new("TextButton"), Instance.new("TextButton")
 ascendBtn.Parent, descendBtn.Parent, speedUpBtn.Parent, speedDownBtn.Parent = screenGui, screenGui, screenGui, screenGui
-
 local function styleSide(btn, pos, txt)
-    btn.Size, btn.Position, btn.BackgroundColor3, btn.TextColor3, btn.Font, btn.TextSize, btn.Text, btn.BorderSizePixel, btn.Visible, btn.ZIndex =
-        UDim2.new(0,52,0,52), pos, COL_ACC, Color3.new(1,1,1), Enum.Font.GothamBold, 20, txt, 0, false, 101
+    btn.Size = UDim2.new(0,52,0,52); btn.Position = pos
+    btn.BackgroundColor3 = COL_ACC; btn.TextColor3 = Color3.new(1,1,1)
+    btn.Font = Enum.Font.GothamBold; btn.TextSize = 20; btn.Text = txt
+    btn.BorderSizePixel = 0; btn.Visible = false; btn.ZIndex = 101
     corner(btn, 12)
 end
 styleSide(ascendBtn,   UDim2.new(0.86,0,0.46,0), "↑")
@@ -143,45 +228,81 @@ local noclipBodyGyro, noclipBodyVel, noclipConnection, noclipCollisionConn = nil
 
 local targetCharacter, lockConnection = nil, nil
 local antiDamageConn, platformConn, stateConn, antiKnockConn = nil, nil, nil, nil
-local knownOurBodyMovers = {} -- para no eliminar los nuestros
-
+local knownOurBodyMovers = {}
 local knockbackConnections = {}
 local knockbackPower, upwardPower = 100, 50
 local floorConnection
 
+-- Gracia de salto/aire
+local jumpGraceEnd, airGraceEnd = 0, 0
+
 --==================================================
--- HUD de Registro
+-- HUD
 --==================================================
 local hudFrame = Instance.new("Frame", screenGui)
-hudFrame.Name, hudFrame.Size, hudFrame.Position, hudFrame.BackgroundColor3, hudFrame.BackgroundTransparency, hudFrame.Visible, hudFrame.Active, hudFrame.ZIndex =
-    "LogHUD", UDim2.new(0,280,0,150), UDim2.new(0.03,0,0.12,0), Color3.fromRGB(22,24,28), 0.1, false, true, 102
+hudFrame.Name = "LogHUD"
+hudFrame.Size = UDim2.new(0,280,0,150)
+hudFrame.Position = UDim2.new(0.03,0,0.12,0)
+hudFrame.BackgroundColor3 = Color3.fromRGB(22,24,28)
+hudFrame.BackgroundTransparency = 0.1
+hudFrame.Visible = false
+hudFrame.Active = true
+hudFrame.ZIndex = 102
 corner(hudFrame, 10)
 
 local hudTop = Instance.new("Frame", hudFrame)
-hudTop.Size, hudTop.Position, hudTop.BackgroundColor3, hudTop.BorderSizePixel, hudTop.ZIndex =
-    UDim2.new(1,0,0,28), UDim2.new(0,0,0,0), Color3.fromRGB(28,30,36), 0, 103
+hudTop.Size = UDim2.new(1,0,0,28)
+hudTop.Position = UDim2.new(0,0,0,0)
+hudTop.BackgroundColor3 = Color3.fromRGB(28,30,36)
+hudTop.BorderSizePixel = 0
+hudTop.ZIndex = 103
 corner(hudTop, 10)
 
 local hudTitle = Instance.new("TextLabel", hudTop)
-hudTitle.BackgroundTransparency, hudTitle.Text, hudTitle.TextColor3, hudTitle.Font, hudTitle.TextSize, hudTitle.TextXAlignment,
-hudTitle.Size, hudTitle.Position, hudTitle.ZIndex =
-    1, "Registro", COL_TXT, Enum.Font.GothamBold, 15, Enum.TextXAlignment.Left, UDim2.new(1,-56,1,0), UDim2.new(0,10,0,0), 103
+hudTitle.BackgroundTransparency = 1
+hudTitle.Text = "Registro"
+hudTitle.TextColor3 = COL_TXT
+hudTitle.Font = Enum.Font.GothamBold
+hudTitle.TextSize = 15
+hudTitle.TextXAlignment = Enum.TextXAlignment.Left
+hudTitle.Size = UDim2.new(1,-56,1,0)
+hudTitle.Position = UDim2.new(0,10,0,0)
+hudTitle.ZIndex = 103
 
 local hudClear = Instance.new("TextButton", hudTop)
-hudClear.Size, hudClear.Position, hudClear.BackgroundColor3, hudClear.TextColor3, hudClear.Text, hudClear.Font, hudClear.TextSize, hudClear.BorderSizePixel, hudClear.ZIndex =
-    UDim2.new(0,24,0,24), UDim2.new(1,-56,0,2), COL_ACC, Color3.new(1,1,1), "⟲", Enum.Font.GothamBold, 14, 0, 103
+hudClear.Size = UDim2.new(0,24,0,24)
+hudClear.Position = UDim2.new(1,-56,0,2)
+hudClear.BackgroundColor3 = COL_ACC
+hudClear.TextColor3 = Color3.new(1,1,1)
+hudClear.Text = "⟲"
+hudClear.Font = Enum.Font.GothamBold
+hudClear.TextSize = 14
+hudClear.BorderSizePixel = 0
+hudClear.ZIndex = 103
 corner(hudClear, 8)
 
 local hudClose = Instance.new("TextButton", hudTop)
-hudClose.Size, hudClose.Position, hudClose.BackgroundColor3, hudClose.TextColor3, hudClose.Text, hudClose.Font, hudClose.TextSize, hudClose.BorderSizePixel, hudClose.ZIndex =
-    UDim2.new(0,24,0,24), UDim2.new(1,-28,0,2), COL_RED, Color3.new(1,1,1), "×", Enum.Font.GothamBold, 14, 0, 103
+hudClose.Size = UDim2.new(0,24,0,24)
+hudClose.Position = UDim2.new(1,-28,0,2)
+hudClose.BackgroundColor3 = COL_RED
+hudClose.TextColor3 = Color3.new(1,1,1)
+hudClose.Text = "×"
+hudClose.Font = Enum.Font.GothamBold
+hudClose.TextSize = 14
+hudClose.BorderSizePixel = 0
+hudClose.ZIndex = 103
 corner(hudClose, 8)
 
 local hudScroll = Instance.new("ScrollingFrame", hudFrame)
-hudScroll.Size, hudScroll.Position, hudScroll.BackgroundTransparency, hudScroll.BorderSizePixel, hudScroll.ScrollBarThickness, hudScroll.ZIndex =
-    UDim2.new(1,-12,1,-36), UDim2.new(0,6,0,32), 1, 0, 4, 102
+hudScroll.Size = UDim2.new(1,-12,1,-36)
+hudScroll.Position = UDim2.new(0,6,0,32)
+hudScroll.BackgroundTransparency = 1
+hudScroll.BorderSizePixel = 0
+hudScroll.ScrollBarThickness = 4
+hudScroll.ZIndex = 102
 local hudList = Instance.new("UIListLayout", hudScroll)
-hudList.SortOrder, hudList.Padding = Enum.SortOrder.LayoutOrder, UDim.new(0,4)
+hudList.SortOrder = Enum.SortOrder.LayoutOrder
+hudList.Padding = UDim.new(0,4)
 
 local function updateCanvas()
     hudScroll.CanvasSize = UDim2.new(0,0,0, hudList.AbsoluteContentSize.Y + 8)
@@ -201,10 +322,16 @@ local function logEvent(msg)
     print(msg)
     if not hudEnabled then return end
     local lab = Instance.new("TextLabel")
-    lab.BackgroundTransparency, lab.TextXAlignment, lab.TextYAlignment, lab.Font, lab.TextSize, lab.TextColor3,
-    lab.Size, lab.Text, lab.ZIndex, lab.Parent =
-        1, Enum.TextXAlignment.Left, Enum.TextYAlignment.Center, Enum.Font.GothamSemibold, 14, colorForMessage(msg),
-        UDim2.new(1,-6,0,18), os.date("%H:%M:%S") .. "  " .. (msg or ""), 102, hudScroll
+    lab.BackgroundTransparency = 1
+    lab.TextXAlignment = Enum.TextXAlignment.Left
+    lab.TextYAlignment = Enum.TextYAlignment.Center
+    lab.Font = Enum.Font.GothamSemibold
+    lab.TextSize = 14
+    lab.TextColor3 = colorForMessage(msg)
+    lab.Size = UDim2.new(1,-6,0,18)
+    lab.Text = os.date("%H:%M:%S") .. "  " .. (msg or "")
+    lab.ZIndex = 102
+    lab.Parent = hudScroll
     updateCanvas()
     Debris:AddItem(lab, 14)
 end
@@ -217,7 +344,7 @@ hudClear.MouseButton1Click:Connect(function()
 end)
 
 --==================================================
--- DRAG util (simple y estable)
+-- DRAG utils (clamp viewport)
 --==================================================
 local draggingFlag, startPosInput, startPosGui
 local function beginDrag(input, gui)
@@ -241,22 +368,24 @@ local function makeDraggable(gui)
     gui.InputBegan:Connect(function(i) beginDrag(i, gui) end)
     gui.InputChanged:Connect(function(i) updateDrag(i, gui) end)
 end
-makeDraggable(dragFrame); makeDraggable(openBtn); makeDraggable(menuFrame); makeDraggable(hudFrame)
+
+-- Arrastrables (NO arrastramos menuFrame para que el borde y el menú se muevan juntos)
+makeDraggable(dragFrame)
+makeDraggable(openBtn)
+makeDraggable(rainbowBorder)
+makeDraggable(hudFrame)
 
 --==================================================
--- UTILIDADES
+-- UTILIDADES varias
 --==================================================
 local function markOurs(inst) if inst then knownOurBodyMovers[inst]=true end end
-
-local function purgeForeignBodyMovers()
-    if not AH_PURGE_BODYMOVERS then return end
-    local char = localPlayer.Character
-    if not char then return end
+local function purgeForeignBodyMovers(skip)
+    if not AH_PURGE_BODYMOVERS or skip then return end
+    local char = localPlayer.Character; if not char then return end
     for _, d in ipairs(char:GetDescendants()) do
         if d:IsA("BodyVelocity") or d:IsA("BodyPosition") or d:IsA("BodyGyro") or d:IsA("BodyAngularVelocity") or d:IsA("BodyForce") or d:IsA("BodyThrust") then
             if not knownOurBodyMovers[d] then
                 pcall(function()
-                    -- Anular influencia en cliente (si el servidor lo recrea, volvemos a purgar en el siguiente Heartbeat)
                     if d:IsA("BodyVelocity") then d.Velocity = Vector3.new() end
                     if d:IsA("BodyPosition") then d.P = 0; d.D = 1000 end
                     if d:IsA("BodyGyro") then d.P = 0 end
@@ -266,7 +395,6 @@ local function purgeForeignBodyMovers()
         end
     end
 end
-
 local function setCharacterCollision(enabled)
     local char = localPlayer.Character; if not char then return end
     for _, part in ipairs(char:GetDescendants()) do
@@ -306,7 +434,7 @@ local function enableESP()
         local h = currentHighlights[plr]
         if not h then
             h = Instance.new("Highlight")
-            h.FillColor           = Color3.fromRGB(255,72,164) -- sutil rosa
+            h.FillColor           = Color3.fromRGB(255,72,164)
             h.FillTransparency    = 0.6
             h.OutlineColor        = Color3.fromRGB(240,240,245)
             h.OutlineTransparency = 0.2
@@ -331,7 +459,7 @@ local function enableESP()
     end)
 end
 local function disableESP()
-    for _, conn in pairs(espConnections) do if conn then conn:Disconnect() end end; espConnections={}
+    for _, c in pairs(espConnections) do if c then c:Disconnect() end end; espConnections={}
     if espGlobalConnection then espGlobalConnection:Disconnect(); espGlobalConnection=nil end
     for plr,h in pairs(currentHighlights) do if h then h:Destroy() end; currentHighlights[plr]=nil end
 end
@@ -365,7 +493,7 @@ local function disableSpeed()
 end
 
 --==================================================
--- LOCK / AIM ASSIST (pega al más cercano dentro de FOV)
+-- LOCK / AIM ASSIST
 --==================================================
 local function getNearestInFOV()
     local cam = Workspace.CurrentCamera; if not cam then return nil end
@@ -382,9 +510,7 @@ local function getNearestInFOV()
                 if dist <= LOCK_RANGE and dist > 1 then
                     local dir = vec / dist
                     local dot = dir:Dot(camDir)
-                    if dot >= cosFov then
-                        if dist < bestDist then bestDist = dist; best = char end
-                    end
+                    if dot >= cosFov and dist < bestDist then bestDist = dist; best = char end
                 end
             end
         end
@@ -400,18 +526,13 @@ local function startLock()
     logEvent("Lock: ON → "..(targetCharacter.Name or "objetivo"))
     lockConnection = RunService.RenderStepped:Connect(function(dt)
         local cam = Workspace.CurrentCamera; if not cam then return end
-        -- modo “sticky”: siempre elegir el más cercano dentro de FOV (evita perderlo)
-        if LOCK_STICKY then
-            local n = getNearestInFOV(); if n then targetCharacter = n end
-        end
+        if LOCK_STICKY then local n = getNearestInFOV(); if n then targetCharacter = n end end
         if not targetCharacter or not targetCharacter.Parent then
             lockConnection:Disconnect(); lockConnection=nil; lockActive=false; logEvent("Lock: objetivo perdido"); return
         end
         local root = targetCharacter:FindFirstChild("HumanoidRootPart"); if not root then return end
         local camPos = cam.CFrame.Position
         local targetCF = CFrame.lookAt(camPos, root.Position)
-
-        -- Limitar giro brusco + suavizado lerp
         local current = cam.CFrame
         local rel = current:Inverse() * targetCF
         local _,_,_, r00,r01,r02, r10,r11,r12, r20,r21,r22 = rel:components()
@@ -455,11 +576,10 @@ local function stopNoclip()
 end
 
 --==================================================
--- ANTI-HIT MEJORADO (no flotar, no salir disparado; respeta salto)
+-- ANTI-HIT MEJORADO
 --==================================================
 local function enableAntiHit()
     local char = localPlayer.Character; local hum = char and char:FindFirstChildOfClass("Humanoid"); if not hum then return end
-
     if not antiDamageConn then
         antiDamageConn = hum.HealthChanged:Connect(function()
             if antiHitEnabled and hum then hum.Health = hum.MaxHealth end
@@ -472,7 +592,12 @@ local function enableAntiHit()
     end
     if not stateConn then
         stateConn = hum.StateChanged:Connect(function(_, new)
-            if antiHitEnabled and (new==Enum.HumanoidStateType.FallingDown or new==Enum.HumanoidStateType.Physics or new==Enum.HumanoidStateType.Ragdoll) then
+            if not antiHitEnabled then return end
+            if new == Enum.HumanoidStateType.Jumping then
+                jumpGraceEnd = time() + JUMP_GRACE
+            elseif new == Enum.HumanoidStateType.Freefall then
+                airGraceEnd = time() + AIR_ANIM_GRACE
+            elseif new == Enum.HumanoidStateType.Ragdoll or new == Enum.HumanoidStateType.Physics then
                 hum:ChangeState(Enum.HumanoidStateType.Running)
             end
         end)
@@ -480,46 +605,42 @@ local function enableAntiHit()
     if not antiKnockConn then
         antiKnockConn = RunService.Heartbeat:Connect(function(dt)
             if not antiHitEnabled then return end
-            local char = localPlayer.Character; hum = char and char:FindFirstChildOfClass("Humanoid")
+            char = localPlayer.Character; hum = char and char:FindFirstChildOfClass("Humanoid")
             local root = char and char:FindFirstChild("HumanoidRootPart"); if not (hum and root) then return end
-
-            purgeForeignBodyMovers() -- limpia empujes raros
-            local isFlyingOrNoclip = flying or noclipEnabled
+            local now = time()
+            local inJumpGrace = now < jumpGraceEnd
+            local inAirGrace  = now < airGraceEnd
             local onGround = hum.FloorMaterial ~= Enum.Material.Air
             local jumping  = hum:GetState()==Enum.HumanoidStateType.Jumping or hum.Jump
+
+            purgeForeignBodyMovers(inJumpGrace or inAirGrace)
 
             local move = hum.MoveDirection
             local base = (noclipEnabled and noclipSpeed) or (currentSpeed or hum.WalkSpeed)
             local desiredH = (move.Magnitude>0) and (move.Unit*base) or Vector3.new()
-
             local v = root.AssemblyLinearVelocity
-            local targetY = v.Y
+            local dvx, dvz = desiredH.X - v.X, desiredH.Z - v.Z
+            local maxDelta = AH_MAX_ACCEL_PER_SEC * math.max(dt, 0.016)
+            local hMag = math.sqrt(dvx*dvx + dvz*dvz)
+            if hMag > maxDelta then local ux, uz = dvx/hMag, dvz/hMag; dvx, dvz = ux*maxDelta, uz*maxDelta end
+            local newVX, newVZ = v.X + dvx, v.Z + dvz
 
-            if not isFlyingOrNoclip then
+            local newVY = v.Y
+            if inJumpGrace or inAirGrace then
+                if newVY > AH_JUMP_UP_CAP then newVY = AH_JUMP_UP_CAP end
+                if newVY < AH_MAX_FALL_SPEED then newVY = AH_MAX_FALL_SPEED end
+            else
                 if jumping and v.Y > 0 then
-                    targetY = math.min(v.Y, AH_JUMP_UP_CAP) -- permitir salto
+                    newVY = math.min(v.Y, AH_JUMP_UP_CAP)
                 else
                     if onGround then
-                        targetY = math.clamp(v.Y, AH_MAX_FALL_SPEED/3, AH_UPWARD_CAP_GROUND)
+                        newVY = math.clamp(v.Y, AH_MAX_FALL_SPEED/3, AH_UPWARD_CAP_GROUND)
                     else
-                        -- en aire: si no saltas, no dejes subir casi nada; acelera bajada controlada
-                        targetY = math.clamp(v.Y, AH_MAX_FALL_SPEED, AH_UPWARD_CAP_AIR)
-                        -- si está "flotando" (subiendo muy lento o 0) sin salto ni ascend/descend, empújalo suave hacia abajo
-                        if not jumping and not ascend and not descend and v.Y > -6 then
-                            targetY = -12
-                        end
+                        newVY = math.clamp(v.Y, AH_MAX_FALL_SPEED, AH_UPWARD_CAP_AIR)
                     end
                 end
             end
-
-            -- Componer y limitar aceleración
-            local targetVel = Vector3.new(desiredH.X, targetY, desiredH.Z)
-            local maxDelta = AH_MAX_ACCEL_PER_SEC * math.max(dt, 0.016)
-            local dv = targetVel - v
-            local mag = dv.Magnitude
-            if mag > maxDelta then dv = dv.Unit * maxDelta end
-
-            root.AssemblyLinearVelocity = v + dv
+            root.AssemblyLinearVelocity = Vector3.new(newVX, newVY, newVZ)
         end)
     end
 end
@@ -574,26 +695,47 @@ local function enableFloor()  floorConnection = RunService.Heartbeat:Connect(spa
 local function disableFloor() if floorConnection then floorConnection:Disconnect(); floorConnection=nil end end
 
 --==================================================
--- AJUSTES (sliders compactos)
+-- AJUSTES (sliders)
 --==================================================
 local settingsFrame = Instance.new("Frame", screenGui)
-settingsFrame.Name, settingsFrame.Size, settingsFrame.Position, settingsFrame.BackgroundColor3, settingsFrame.Visible, settingsFrame.Active, settingsFrame.ZIndex =
-    "SettingsPanel", UDim2.new(0,300,0,240), UDim2.new(0.54,-150,0.46,-120), Color3.fromRGB(22,24,28), false, true, 110
+settingsFrame.Name = "SettingsPanel"
+settingsFrame.Size = UDim2.new(0,300,0,240)
+settingsFrame.Position = UDim2.new(0.54,-150,0.46,-120)
+settingsFrame.BackgroundColor3 = Color3.fromRGB(22,24,28)
+settingsFrame.Visible = false
+settingsFrame.Active = true
+settingsFrame.ZIndex = 110
 corner(settingsFrame, 10); makeDraggable(settingsFrame)
 
 local setTop = Instance.new("Frame", settingsFrame)
-setTop.Size, setTop.Position, setTop.BackgroundColor3, setTop.BorderSizePixel, setTop.ZIndex =
-    UDim2.new(1,0,0,40), UDim2.new(0,0,0,0), Color3.fromRGB(28,30,36), 0, 111
+setTop.Size = UDim2.new(1,0,0,40)
+setTop.Position = UDim2.new(0,0,0,0)
+setTop.BackgroundColor3 = Color3.fromRGB(28,30,36)
+setTop.BorderSizePixel = 0
+setTop.ZIndex = 111
 corner(setTop, 10)
 
 local setTitle = Instance.new("TextLabel", setTop)
-setTitle.BackgroundTransparency, setTitle.Text, setTitle.TextColor3, setTitle.Font, setTitle.TextSize, setTitle.TextXAlignment,
-setTitle.Size, setTitle.Position, setTitle.ZIndex =
-    1, "Ajustes", COL_TXT, Enum.Font.GothamBold, 18, Enum.TextXAlignment.Left, UDim2.new(1,-40,1,0), UDim2.new(0,12,0,0), 111
+setTitle.BackgroundTransparency = 1
+setTitle.Text = "Ajustes"
+setTitle.TextColor3 = COL_TXT
+setTitle.Font = Enum.Font.GothamBold
+setTitle.TextSize = 18
+setTitle.TextXAlignment = Enum.TextXAlignment.Left
+setTitle.Size = UDim2.new(1,-40,1,0)
+setTitle.Position = UDim2.new(0,12,0,0)
+setTitle.ZIndex = 111
 
 local setClose = Instance.new("TextButton", setTop)
-setClose.Size, setClose.Position, setClose.BackgroundColor3, setClose.TextColor3, setClose.Text, setClose.Font, setClose.TextSize, setClose.BorderSizePixel, setClose.ZIndex =
-    UDim2.new(0,26,0,26), UDim2.new(1,-32,0,7), COL_RED, Color3.new(1,1,1), "×", Enum.Font.GothamBold, 18, 0, 111
+setClose.Size = UDim2.new(0,26,0,26)
+setClose.Position = UDim2.new(1,-32,0,7)
+setClose.BackgroundColor3 = COL_RED
+setClose.TextColor3 = Color3.new(1,1,1)
+setClose.Text = "×"
+setClose.Font = Enum.Font.GothamBold
+setClose.TextSize = 18
+setClose.BorderSizePixel = 0
+setClose.ZIndex = 111
 corner(setClose, 8)
 
 local function slider(parent, y, labelText, minVal, maxVal, defaultVal, decimals)
@@ -655,6 +797,22 @@ localPlayer.CharacterAdded:Connect(function()
 end)
 
 --==================================================
+-- QUICK LOCK BUTTON (movible)
+--==================================================
+local quickLockBtn = Instance.new("TextButton", screenGui)
+quickLockBtn.Size = UDim2.new(0,68,0,68)
+quickLockBtn.Position = UDim2.new(0.82,0,0.76,0)
+quickLockBtn.BackgroundColor3 = COL_ACC
+quickLockBtn.TextColor3 = Color3.new(1,1,1)
+quickLockBtn.Font = Enum.Font.GothamBold
+quickLockBtn.TextSize = 16
+quickLockBtn.Text = "LOCK"
+quickLockBtn.BorderSizePixel = 0
+quickLockBtn.Visible = false
+quickLockBtn.ZIndex = 101
+corner(quickLockBtn, 12); makeDraggable(quickLockBtn)
+
+--==================================================
 -- CONEXIONES DE BOTONES
 --==================================================
 flyToggleBtn.MouseButton1Click:Connect(function()
@@ -666,7 +824,6 @@ flyToggleBtn.MouseButton1Click:Connect(function()
     else
         ascend=false; descend=false; stopFly()
     end
-    -- mostrar controles verticales solo cuando aplica
     local showAD = flying or noclipEnabled
     ascendBtn.Visible, descendBtn.Visible = showAD, showAD
     logEvent("Fly: "..(flying and "ON" or "OFF"))
@@ -689,13 +846,7 @@ speedToggleBtn.MouseButton1Click:Connect(function()
     logEvent("Speed: "..(speedEnabled and "ON" or "OFF"))
 end)
 
--- Lock Button (mostrar/ocultar botón rápido en esquina)
-local quickLockBtn = Instance.new("TextButton", screenGui)
-quickLockBtn.Size, quickLockBtn.Position, quickLockBtn.BackgroundColor3, quickLockBtn.TextColor3, quickLockBtn.Font, quickLockBtn.TextSize,
-quickLockBtn.Text, quickLockBtn.BorderSizePixel, quickLockBtn.Visible, quickLockBtn.ZIndex =
-    UDim2.new(0,68,0,68), UDim2.new(0.82,0,0.76,0), COL_ACC, Color3.new(1,1,1), Enum.Font.GothamBold, 16, "LOCK", 0, false, 101
-corner(quickLockBtn, 12); makeDraggable(quickLockBtn)
-
+local lockBtnVisible = false
 lockToggleBtn.MouseButton1Click:Connect(function()
     lockBtnVisible = not lockBtnVisible
     quickLockBtn.Visible = lockBtnVisible
@@ -722,6 +873,7 @@ noclipToggleBtn.MouseButton1Click:Connect(function()
     logEvent("Noclip: "..(noclipEnabled and "ON" or "OFF"))
 end)
 
+local antiHitEnabled = true
 antiHitToggleBtn.MouseButton1Click:Connect(function()
     if antiHitEnabled then antiHitEnabled=false; disableAntiHit(); antiHitToggleBtn.Text="Anti-Hit OFF"
     else antiHitEnabled=true; enableAntiHit(); antiHitToggleBtn.Text="Anti-Hit ON" end
@@ -747,18 +899,30 @@ hudToggleBtn.MouseButton1Click:Connect(function()
     if hudEnabled then logEvent("HUD visible") end
 end)
 
--- Quick Lock button (Aim Assist toggle)
+-- Abrir/Cerrar menú (mostrar/ocultar borde + menú internos)
+openBtn.MouseButton1Click:Connect(function()
+    dragFrame.Visible = false
+    rainbowBorder.Visible = true
+    menuFrame.Visible = true
+end)
+closeBtn.MouseButton1Click:Connect(function()
+    rainbowBorder.Visible = false
+    menuFrame.Visible = false
+    dragFrame.Visible = true
+end)
+
+-- Quick Lock
 quickLockBtn.MouseButton1Click:Connect(function()
     if not lockActive then startLock() else stopLock() end
 end)
 
--- Side buttons: Speed +/- y ↑/↓
+-- Flechas de velocidad y ascenso/descenso
 speedUpBtn.MouseButton1Click:Connect(function()
     if speedTarget=="walk" and speedEnabled then
         local hum = localPlayer.Character and localPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if hum then currentSpeed=math.min((hum.WalkSpeed or 16)+speedIncrement, WALK_MAX_SPEED); hum.WalkSpeed=currentSpeed; walkSlider.set(currentSpeed); logEvent(("Speed + → %d"):format(currentSpeed)) end
+        if hum then currentSpeed=math.min((hum.WalkSpeed or 16)+speedIncrement, WALK_MAX_SPEED); hum.WalkSpeed=currentSpeed; logEvent(("Speed + → %d"):format(currentSpeed)) end
     elseif speedTarget=="noclip" and noclipEnabled then
-        noclipSpeed=math.min(noclipSpeed+speedIncrement, NOCLIP_MAX_SPEED); noclipSlider.set(noclipSpeed); logEvent(("Noclip Speed + → %d"):format(noclipSpeed))
+        noclipSpeed=math.min(noclipSpeed+speedIncrement, NOCLIP_MAX_SPEED); logEvent(("Noclip Speed + → %d"):format(noclipSpeed))
     end
 end)
 speedDownBtn.MouseButton1Click:Connect(function()
@@ -767,10 +931,10 @@ speedDownBtn.MouseButton1Click:Connect(function()
         if hum then
             local baseMin = originalWalkSpeed or 10
             currentSpeed = math.max((hum.WalkSpeed or 16)-speedIncrement, baseMin); currentSpeed=math.min(currentSpeed, WALK_MAX_SPEED)
-            hum.WalkSpeed=currentSpeed; walkSlider.set(currentSpeed); logEvent(("Speed - → %d"):format(currentSpeed))
+            hum.WalkSpeed=currentSpeed; logEvent(("Speed - → %d"):format(currentSpeed))
         end
     elseif speedTarget=="noclip" and noclipEnabled then
-        noclipSpeed=math.max(noclipSpeed-speedIncrement,10); noclipSlider.set(noclipSpeed); logEvent(("Noclip Speed - → %d"):format(noclipSpeed))
+        noclipSpeed=math.max(noclipSpeed-speedIncrement,10); logEvent(("Noclip Speed - → %d"):format(noclipSpeed))
     end
 end)
 ascendBtn.MouseButton1Down:Connect(function() ascend=true end)
@@ -778,12 +942,8 @@ ascendBtn.MouseButton1Up:Connect(function()   ascend=false end)
 descendBtn.MouseButton1Down:Connect(function() descend=true end)
 descendBtn.MouseButton1Up:Connect(function()   descend=false end)
 
--- Menú open/close
-openBtn.MouseButton1Click:Connect(function() dragFrame.Visible=false; menuFrame.Visible=true end)
-closeBtn.MouseButton1Click:Connect(function() menuFrame.Visible=false; dragFrame.Visible=true end)
-
 --==================================================
--- TP-Server (exactamente como lo pediste anteriormente)
+-- TP-Server (código EXACTO dentro del botón)
 --==================================================
 tpBtn.MouseButton1Click:Connect(function()
     -- === INICIO CÓDIGO EXACTO DEL TP ===
@@ -877,8 +1037,4 @@ end)
 -- AUTO: Anti-Hit ON al cargar
 --==================================================
 enableAntiHit()
-print("✅ UI simple cargada + Anti-Hit mejorado + Lock (aim assist) estable + TP-Server")
-
---==================================================
--- FIN
---==================================================
+print("✅ Cargado: Menú arcoíris • Anti-Hit estable • Aim Assist • UI móvil • TP-Server listo")
